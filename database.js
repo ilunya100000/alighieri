@@ -57,6 +57,34 @@ function seedState() {
     .run(JSON.stringify(state), new Date().toISOString());
 }
 
+function migrateState() {
+  const state = readState();
+  let changed = false;
+  if (!Array.isArray(state.holidays) || state.holidays.length === 0) {
+    state.holidays = [
+      { id: 'autumn-2026', name: 'Осенние каникулы', start: '2026-10-26', end: '2026-11-03' },
+      { id: 'winter-2026', name: 'Зимние каникулы', start: '2026-12-31', end: '2027-01-10' },
+      { id: 'spring-2027', name: 'Весенние каникулы', start: '2027-03-27', end: '2027-04-04' },
+      { id: 'summer-2027', name: 'Летние каникулы', start: '2027-05-26', end: null }
+    ];
+    changed = true;
+  }
+  for (const day of state.schedule || []) {
+    day.lessons = day.lessons.map(subject => {
+      if (subject === 'Английский язык (Разговорный практикум)') {
+        changed = true;
+        return 'Английский язык (Р)';
+      }
+      return subject;
+    });
+  }
+  if (state.meta?.version !== 2) {
+    state.meta.version = 2;
+    changed = true;
+  }
+  if (changed) writeState(state);
+}
+
 function readState() {
   const row = db.prepare('SELECT json FROM app_state WHERE id = 1').get();
   return JSON.parse(row.json);
@@ -193,6 +221,7 @@ function setSupplyRecommendation(supplyId, recommended, necessity) {
 }
 
 seedState();
+migrateState();
 syncSupplyCatalog();
 
 module.exports = {

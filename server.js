@@ -47,7 +47,7 @@ function currentUser(req) {
 function setSessionCookie(res, session, req) {
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   const maxAge = Math.max(0, Math.floor((session.expires.getTime() - Date.now()) / 1000));
-  res.setHeader('Set-Cookie', `alegieri_session=${encodeURIComponent(session.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+  res.setHeader('Set-Cookie', `alegieri_session=${encodeURIComponent(session.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}; Expires=${session.expires.toUTCString()}${secure}`);
 }
 
 function clearSessionCookie(res) {
@@ -107,6 +107,10 @@ function requireAdmin(req, res) {
     return null;
   }
   return user;
+}
+
+function holidayFor(state, key) {
+  return (state.holidays || []).find(item => key >= item.start && (!item.end || key <= item.end));
 }
 
 async function api(req, res, url) {
@@ -192,14 +196,25 @@ async function api(req, res, url) {
     if (!requireAdmin(req, res)) return;
     const input = await bodyFrom(req);
     const state = readState();
-    let item = state.homework.find(entry => entry.id === input.id || entry.subject === input.subject);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date || '')) return json(res, 400, { error: 'Укажите дату урока' });
+    const homeworkDate = new Date(`${input.date}T12:00:00`);
+    const dayKey = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][homeworkDate.getDay()];
+    const day = state.schedule.find(entry => entry.day === dayKey);
+    const lesson = Number(input.lesson);
+    if (holidayFor(state, input.date) || state.scheduleChanges.some(entry => entry.type === 'day_off' && entry.date === input.date)) return json(res, 400, { error: 'Нельзя задать ДЗ на выходной день' });
+    if (!day || !Number.isInteger(lesson) || lesson < 1 || lesson > day.lessons.length) return json(res, 400, { error: 'Такого урока нет в расписании' });
+    const change = state.scheduleChanges.find(entry => entry.date === input.date && Number(entry.lesson) === lesson);
+    if (change?.type === 'cancelled') return json(res, 400, { error: 'Нельзя задать ДЗ на отменённый урок' });
+    const scheduledSubject = change?.type === 'replacement' && change.to ? change.to : day.lessons[lesson - 1];
+    const subject = String(input.subject || scheduledSubject).trim().slice(0, 100);
+    let item = state.homework.find(entry => entry.date === input.date && Number(entry.lesson) === lesson);
     if (!item) {
-      if (!input.subject) return json(res, 400, { error: 'Укажите предмет' });
       item = {
         id: `hw-${Date.now()}`,
-        subject: String(input.subject).slice(0, 100),
+        subject,
+        date: input.date,
+        lesson,
         teacher: '',
-        date: 'Актуальное',
         dueLabel: '',
         status: 'unknown',
         task: '',
@@ -209,6 +224,9 @@ async function api(req, res, url) {
       state.homework.push(item);
     }
     Object.assign(item, {
+      subject,
+      date: input.date,
+      lesson,
       status: input.status ?? item.status,
       task: input.task ?? item.task,
       dueLabel: input.dueLabel ?? item.dueLabel
@@ -225,18 +243,43 @@ async function api(req, res, url) {
     const day = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][changeDate.getDay()];
     if (!['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'].includes(day)) return json(res, 400, { error: 'На воскресенье расписания нет' });
     const state = readState();
-    const change = {
-      id: `change-${Date.now()}`,
+    const type = input.type;
+    if (type === 'working_day') {
+      const before = state.scheduleChanges.length;
+      state.scheduleChanges = state.scheduleChanges.filter(entry => !(entry.type === 'day_off' && entry.date === input.date));
+      if (state.scheduleChanges.length !== before) writeState(state);
+      return json(res, 200, { ok: true, removed: before - state.scheduleChanges.length });
+    }
+    if (type === 'day_off') {
+      let dayOff = state.scheduleChanges.find(entry => entry.type === 'day_off' && entry.date === input.date);
+      if (!dayOff) {
+        dayOff = { id: `day-off-${Date.now()}` };
+        state.scheduleChanges.push(dayOff);
+      }
+      Object.assign(dayOff, { date: input.date, day, lesson: null, type: 'day_off', from: '', to: '', teacher: '', note: String(input.note || 'Дополнительный выходной').slice(0, 200) });
+      writeState(state);
+      return json(res, 201, dayOff);
+    }
+    if (!['replacement', 'cancelled'].includes(type)) return json(res, 400, { error: 'Неизвестный тип изменения' });
+    const lesson = Number(input.lesson);
+    const scheduleDay = state.schedule.find(entry => entry.day === day);
+    if (!scheduleDay || !Number.isInteger(lesson) || lesson < 1 || lesson > scheduleDay.lessons.length) return json(res, 400, { error: 'Такого урока нет в расписании' });
+    if (type === 'replacement' && !String(input.to || '').trim()) return json(res, 400, { error: 'Выберите новый предмет' });
+    let change = state.scheduleChanges.find(entry => entry.date === input.date && Number(entry.lesson) === lesson && entry.type !== 'day_off');
+    if (!change) {
+      change = { id: `change-${Date.now()}` };
+      state.scheduleChanges.push(change);
+    }
+    Object.assign(change, {
       date: input.date,
       day,
-      lesson: Number(input.lesson),
-      type: input.type,
+      lesson,
+      type,
       from: input.from || '',
       to: input.to || '',
       teacher: input.teacher || '',
       note: input.note || ''
-    };
-    state.scheduleChanges.push(change);
+    });
     writeState(state);
     return json(res, 201, change);
   }
@@ -304,6 +347,15 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
+    if (url.pathname === '/' && url.searchParams.get('release') === '1') {
+      res.writeHead(302, {
+        Location: '/?release=2.4',
+        'Cache-Control': 'no-store, max-age=0',
+        'Clear-Site-Data': '"cache"'
+      });
+      res.end();
+      return;
+    }
     if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else staticFile(req, res, url);
   } catch (error) {
@@ -313,6 +365,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Алегьери v1 запущен: http://localhost:${PORT}`);
+  console.log(`Алегьери v2 запущен: http://localhost:${PORT}`);
   console.log('Для устройств в одной сети используйте IP этого компьютера и тот же порт.');
 });

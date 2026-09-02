@@ -10,14 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="Алегьери">
   <meta name="description" content="Дневник, расписание и помощник одного класса">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icon.svg?v=1">
-  <link rel="stylesheet" href="/styles.css?v=1">
+  <link rel="icon" href="/icon.svg?v=2.4">
+  <link rel="stylesheet" href="/styles.css?v=2.4">
   <title>Алегьери</title>
 </head>
 <body>
   <section class="auth-screen" id="auth-screen">
     <div class="auth-identity">
-      <img src="/icon.svg?v=1" alt="Логотип Алегьери">
+      <img src="/icon.svg?v=2.4" alt="Логотип Алегьери">
       <div><p>УЧЕБНОЕ ПРОСТРАНСТВО</p><h1>Алегьери</h1><span>Всё важное для 9 В — в одном месте.</span></div>
     </div>
     <div class="auth-card">
@@ -37,13 +37,13 @@
       <p class="auth-error" id="auth-error" role="alert"></p>
       <small class="auth-note">Ваши личные данные и принадлежности доступны только после входа.</small>
     </div>
-    <p class="auth-version">Алегьери · версия 1.0</p>
+    <p class="auth-version">Алегьери · версия 2.0</p>
   </section>
 
   <div class="app-shell" id="app-shell" hidden>
     <aside class="sidebar">
       <a class="brand" href="#today" data-route="today" aria-label="Алегьери">
-        <span class="brand-mark"><img src="/icon.svg?v=1" alt=""></span>
+        <span class="brand-mark"><img src="/icon.svg?v=2.4" alt=""></span>
         <span><b>Алегьери</b><small>9 В</small></span>
       </a>
 
@@ -63,7 +63,7 @@
 
     <main class="main-content">
       <header class="topbar">
-        <div class="mobile-brand"><span class="brand-mark"><img src="/icon.svg?v=1" alt=""></span><b>Алегьери</b></div>
+        <div class="mobile-brand"><span class="brand-mark"><img src="/icon.svg?v=2.4" alt=""></span><b>Алегьери</b></div>
         <button class="icon-button sidebar-toggle" id="sidebar-toggle" title="Скрыть или показать левое меню" aria-label="Скрыть или показать левое меню">☰</button>
         <div class="sync-state" id="sync-state" title="Состояние соединения">
           <span class="sync-dot"></span><span class="sync-text">Подключение…</span>
@@ -109,16 +109,14 @@
 
         <section class="page" data-page="homework">
           <div class="page-heading"><div><p class="eyebrow">ЭЛЕКТРОННЫЙ ДНЕВНИК</p><h1>Домашние задания</h1><p>Актуальная информация по предметам и срокам.</p></div><button class="primary-button" id="open-proposal">＋ Предложить ДЗ</button></div>
-          <div class="status-legend">
-            <span><i class="assigned"></i>Задано</span><span><i class="known"></i>Известно, что задано</span><span><i class="unknown"></i>О ДЗ неизвестно</span><span><i class="none"></i>Нет ДЗ</span>
-          </div>
-          <div class="filter-row"><div class="segmented" id="homework-filter"><button class="active" data-filter="all">Все</button><button data-filter="assigned">Нужно сделать</button><button data-filter="attention">Без информации</button></div><span class="updated-label" id="updated-label">Последнее обновление: —</span></div>
+          <div class="filter-row"><div class="segmented" id="homework-filter"><button class="active" data-filter="current">Актуальное</button><button data-filter="tomorrow">На завтра</button><button data-filter="week">На неделю</button></div><span class="updated-label" id="updated-label">Последнее обновление: —</span></div>
           <div id="homework-full" class="homework-list"></div>
         </section>
 
         <section class="page" data-page="schedule">
           <div class="page-heading"><div><p class="eyebrow">КАЛЕНДАРЬ</p><h1>Расписание</h1><p>Уроки, замены и отмены на неделю.</p></div><div class="week-picker"><button id="previous-week" aria-label="Предыдущая неделя">‹</button><button class="today-week" id="current-week">Сегодня</button><span id="week-label">Учебная неделя</span><button id="next-week" aria-label="Следующая неделя">›</button></div></div>
           <div class="schedule-alert" id="schedule-alert"><span>!</span><div><b>На этой неделе есть изменения</b><p>Замены и отмены выделены прямо в расписании.</p></div></div>
+          <div class="status-legend schedule-status-legend"><span><i class="assigned"></i>Задано</span><span><i class="known"></i>Известно, что задано</span><span><i class="unknown"></i>О ДЗ неизвестно</span><span><i class="none"></i>Нет ДЗ</span></div>
           <div class="schedule-board" id="schedule-board"></div>
         </section>
 
@@ -141,8 +139,8 @@
         <section class="page" data-page="admin">
           <div class="page-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ</p><h1>Панель администратора</h1><p>Обновление дневника, расписания и проверка предложений.</p></div><span class="role-warning" id="role-warning">Демо-режим администратора</span></div>
           <div class="admin-grid">
-            <section class="panel admin-card"><div class="admin-icon purple">✓</div><h2>Статусы ДЗ</h2><p>Выберите предмет и установите актуальный статус.</p><form id="admin-homework-form"><label>Предмет<select id="admin-hw-id"></select></label><label>Статус<select id="admin-hw-status"><option value="assigned">Задано</option><option value="known">Известно, что задано</option><option value="unknown">О ДЗ неизвестно</option><option value="none">Нет ДЗ</option></select></label><label>Текст задания<textarea id="admin-hw-task" rows="3"></textarea></label><button class="primary-button" type="submit">Сохранить</button></form></section>
-            <section class="panel admin-card"><div class="admin-icon orange">▦</div><h2>Изменение расписания</h2><p>Добавьте замену предмета, учителя или отмену на конкретную дату.</p><form id="admin-change-form"><div class="form-row"><label>Дата<input id="change-date" type="date" required></label><label>Урок<input id="change-lesson" type="number" min="1" max="7" value="1"></label></div><label>Тип<select id="change-type"><option value="replacement">Замена</option><option value="cancelled">Отмена</option></select></label><label>Новый предмет<input id="change-to" placeholder="Например, География"></label><label>Учитель и примечание<input id="change-note" placeholder="Учитель, кабинет или причина"></label><button class="primary-button" type="submit">Добавить изменение</button></form></section>
+            <section class="panel admin-card"><div class="admin-icon purple">✓</div><h2>Домашнее задание урока</h2><p>ДЗ привязано к конкретной дате и уроку, включая замены.</p><form id="admin-homework-form"><div class="form-row"><label>Дата<input id="admin-hw-date" type="date" required></label><label>Урок<select id="admin-hw-lesson"></select></label></div><label>Предмет<select id="admin-hw-id"></select></label><label>Статус<select id="admin-hw-status"><option value="assigned">Задано</option><option value="known">Известно, что задано</option><option value="unknown">О ДЗ неизвестно</option><option value="none">Нет ДЗ</option></select></label><label>Текст задания<textarea id="admin-hw-task" rows="3"></textarea></label><button class="primary-button" type="submit">Сохранить</button></form></section>
+            <section class="panel admin-card"><div class="admin-icon orange">▦</div><h2>Изменение расписания</h2><p>Добавьте замену, отмену урока или выходной на весь день.</p><form id="admin-change-form"><div class="form-row"><label>Дата<input id="change-date" type="date" required></label><label id="change-lesson-label">Урок<input id="change-lesson" type="number" min="1" max="7" value="1"></label></div><label>Тип<select id="change-type"><option value="replacement">Замена урока</option><option value="cancelled">Отмена урока</option><option value="day_off">Весь день выходной</option><option value="working_day">Вернуть учебный день</option></select></label><label id="change-subject-label">Новый предмет<select id="change-to"></select></label><label>Примечание<input id="change-note" placeholder="Учитель, кабинет или причина"></label><button class="primary-button" type="submit">Сохранить изменение</button></form><div class="day-off-list" id="day-off-list"></div></section>
             <section class="panel admin-card proposals-card"><div class="admin-icon blue">✦</div><h2>Предложения учеников</h2><p>Новые варианты домашних заданий попадут сюда.</p><div id="proposal-list" class="proposal-list"></div></section>
             <section class="panel admin-card supply-admin-card"><div class="admin-icon purple">◫</div><h2>Рекомендации по принадлежностям</h2><p>Настройте количество и уровень необходимости для каждого предмета.</p><div id="admin-supplies" class="admin-supplies"></div></section>
           </div>
@@ -174,6 +172,6 @@
     <button id="logout-button">Выйти из аккаунта</button>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/app.js?v=1" defer></script>
+  <script src="/app.js?v=2.4" defer></script>
 </body>
 </html>
