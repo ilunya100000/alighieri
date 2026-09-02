@@ -9,18 +9,20 @@ const coordinateColors = ['#7c5cff', '#3c8dff', '#f59e45', '#45ad7d', '#df665d',
 const fallbackState = {
   meta: { className: '9 В', updatedAt: new Date().toISOString(), term: '' },
   homework: [], schedule: [], scheduleChanges: [], bellSchedule: [], supplies: { 'current-student': [] },
+  holidays: [],
   coordinates: { subjects: [], teachers: [] }, proposals: []
 };
 
 let appState = fallbackState;
 let supplyState = [];
 let currentUser = null;
-let activeHomeworkFilter = 'all';
+let activeHomeworkPeriod = 'current';
 let activeMap = 'subjects';
 let currentRole = 'student';
 let weekOffset = 0;
 let dragState = null;
 let deferredInstall;
+let adminHomeworkDirty = false;
 const supplySaveTimers = new Map();
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -66,17 +68,118 @@ function subjectsFromSchedule() {
   return [...new Set(appState.schedule.flatMap(day => day.lessons))];
 }
 
-function homeworkItems() {
-  return subjectsFromSchedule().map((subject, index) => appState.homework.find(item => item.subject === subject) || {
-    id: `subject-${index}`,
-    subject,
-    teacher: '',
-    dueLabel: '',
-    status: 'unknown',
-    task: 'Информация о домашнем задании пока не добавлена',
-    icon: subject.slice(0, 1).toUpperCase(),
-    accent: ['violet', 'blue', 'orange', 'green'][index % 4]
-  });
+function displaySubjectName(subject = '') {
+  return subject === 'Английский язык (Разговорный практикум)' ? 'Английский язык (Р)' : subject;
+}
+
+function subjectIcon(subject = '') {
+  const value = subject.toLocaleLowerCase('ru-RU');
+  let paths = '<path d="M5 5.5h14v13H5z"/><path d="M9 5.5v13"/>';
+  if (/алгеб/.test(value)) paths = '<path d="M4 18c3-10 5-10 8 0 2-7 4-7 8-2"/><path d="M4 7h5M6.5 4.5v5"/>';
+  else if (/геометр/.test(value)) paths = '<path d="m4 19 8-15 8 15z"/><path d="M8 15h8M12 4v15"/>';
+  else if (/физик/.test(value)) paths = '<circle cx="12" cy="12" r="2"/><ellipse cx="12" cy="12" rx="9" ry="3.8"/><ellipse cx="12" cy="12" rx="3.8" ry="9" transform="rotate(35 12 12)"/>';
+  else if (/русск/.test(value)) paths = '<path d="m5 19 2-5L17 4l3 3-10 10z"/><path d="m14 7 3 3M5 19l5-2"/>';
+  else if (/литератур/.test(value)) paths = '<path d="M4 5h6a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H4z"/><path d="M20 5h-4a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h4z"/>';
+  else if (/англий.*\(р\)/.test(value)) paths = '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/>';
+  else if (/итальян.*\(р\)/.test(value)) paths = '<path d="M5 5h14v11H9l-4 4z"/><path d="M9 9h6M9 12h4"/>';
+  else if (/англий/.test(value)) paths = '<path d="M5 4.5h10a3 3 0 0 1 3 3v12H8a3 3 0 0 0-3 0z"/><path d="m9 14 2.5-6 2.5 6m-4-2h3"/>';
+  else if (/итальян/.test(value)) paths = '<path d="M5 4v16M6 5h13l-3 4 3 4H6"/><path d="M10 5v8M14 5v8"/>';
+  else if (/информат/.test(value)) paths = '<rect x="3.5" y="5" width="17" height="12" rx="2"/><path d="m8 10-2 2 2 2m8-4 2 2-2 2m-5 3v3m-3 0h6"/>';
+  else if (/хими/.test(value)) paths = '<path d="M9 3v6l-4 8a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-4-8V3M8 14h8M8 3h8"/>';
+  else if (/биолог/.test(value)) paths = '<path d="M19 4C9 4 5 9 5 15c4 1 11-1 14-11Z"/><path d="M5 20c2-6 6-9 12-13"/>';
+  else if (/географ/.test(value)) paths = '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/>';
+  else if (/истори/.test(value)) paths = '<path d="M4 9h16M6 9v8m4-8v8m4-8v8m4-8v8M3 20h18M12 3 3 7h18z"/>';
+  else if (/обществ/.test(value)) paths = '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 20c0-4 2-6 5-6s5 2 5 6M11 20c0-4 2-6 5-6s5 2 5 6"/>';
+  else if (/физкультур/.test(value)) paths = '<circle cx="12" cy="5" r="2"/><path d="m8 21 2-6-3-3m3 3 3-5 4 3m-7-5 3 2 3-2"/>';
+  else if (/труд/.test(value)) paths = '<path d="m14 6 4-3 3 3-3 4M5 20l8-8M4 14l6 6M3 17l4 4"/>';
+  else if (/обзр/.test(value)) paths = '<path d="M12 3 4.5 6v5c0 5 3.2 8.5 7.5 10 4.3-1.5 7.5-5 7.5-10V6z"/><path d="M12 8v7M8.5 11.5h7"/>';
+  else if (/вис/.test(value)) paths = '<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/>';
+  else if (/вд |разговоры о важном/.test(value)) paths = '<path d="M5 5h14v11H9l-4 4z"/><path d="m9 10 2 2 4-4"/>';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+
+function schoolDay(date) {
+  const keys = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  return appState.schedule.find(day => day.day === keys[date.getDay()]);
+}
+
+function dayOffInfo(date) {
+  const key = dateKey(date);
+  const manual = (appState.scheduleChanges || []).find(change => change.type === 'day_off' && change.date === key);
+  if (manual) return { name: manual.note || 'Выходной день', manual: true };
+  const holiday = (appState.holidays || []).find(item => key >= item.start && (!item.end || key <= item.end));
+  return holiday ? { name: holiday.name, manual: false } : null;
+}
+
+function instructionDay(date) {
+  const scheduledDay = schoolDay(date);
+  return scheduledDay && !dayOffInfo(date) ? scheduledDay : null;
+}
+
+function nextSchoolDate(from = new Date(), includeToday = false) {
+  const date = new Date(from);
+  date.setHours(12, 0, 0, 0);
+  if (!includeToday) date.setDate(date.getDate() + 1);
+  for (let attempts = 0; attempts < 370; attempts += 1) {
+    if (instructionDay(date)) return date;
+    date.setDate(date.getDate() + 1);
+  }
+  return null;
+}
+
+function homeworkDates(period = activeHomeworkPeriod) {
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  if (period === 'current') {
+    const current = instructionDay(now) ? now : nextSchoolDate(now, true);
+    return current ? [current] : [];
+  }
+  if (period === 'tomorrow') {
+    const tomorrow = nextSchoolDate(now);
+    return tomorrow ? [tomorrow] : [];
+  }
+  const dates = [];
+  const cursor = new Date(now);
+  for (let offset = 0; offset < 7; offset += 1) {
+    if (instructionDay(cursor)) dates.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function homeworkForLesson(date, lesson, subject) {
+  const key = dateKey(date);
+  return appState.homework.find(item => item.date === key && Number(item.lesson) === lesson)
+    || appState.homework.find(item => item.date === key && item.subject === subject && !item.lesson);
+}
+
+function homeworkItems(period = activeHomeworkPeriod) {
+  const result = [];
+  for (const date of homeworkDates(period)) {
+    const day = schoolDay(date);
+    if (!day) continue;
+    day.lessons.forEach((originalSubject, index) => {
+      const lesson = index + 1;
+      const change = changeFor(day.day, lesson, date);
+      if (change?.type === 'cancelled') return;
+      const subject = change?.type === 'replacement' && change.to ? change.to : originalSubject;
+      const saved = homeworkForLesson(date, lesson, subject);
+      result.push({
+        id: saved?.id || `lesson-${dateKey(date)}-${lesson}`,
+        subject,
+        originalSubject,
+        teacher: change?.teacher || saved?.teacher || '',
+        date: dateKey(date),
+        lesson,
+        dueLabel: `${date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })} · ${lesson} урок`,
+        status: saved?.status || 'unknown',
+        task: saved?.task || 'Задание пока не указано',
+        accent: saved?.accent || ['violet', 'blue', 'orange', 'green'][index % 4],
+        replacement: change?.type === 'replacement'
+      });
+    });
+  }
+  return result;
 }
 
 function dateKey(date) {
@@ -150,10 +253,10 @@ async function loadState({ quiet = false } = {}) {
 function homeworkTemplate(item) {
   const status = statusMeta[item.status] || statusMeta.unknown;
   return `<article class="homework-item accent-${escapeHtml(item.accent || 'violet')}" data-status="${escapeHtml(item.status)}">
-    <div class="subject-icon">${escapeHtml(item.icon)}</div>
-    <div class="subject-name"><b>${escapeHtml(item.subject)}</b><small>${escapeHtml(item.teacher)}</small></div>
+    <div class="subject-icon">${subjectIcon(item.subject)}</div>
+    <div class="subject-name"><b>${escapeHtml(displaySubjectName(item.subject))}</b><small>${item.replacement ? `Замена вместо ${escapeHtml(displaySubjectName(item.originalSubject))}` : escapeHtml(item.teacher)}</small></div>
     <div class="task-text">${escapeHtml(item.task)}<small>${escapeHtml(item.dueLabel)}</small></div>
-    <span class="status-chip">${status.label}</span>
+    <span class="homework-state">${status.label}</span>
   </article>`;
 }
 
@@ -165,10 +268,14 @@ function renderHomework() {
   const preview = allHomework.filter(item => item.status !== 'none').slice(0, 3);
   $('#homework-preview').innerHTML = preview.length ? preview.map(homeworkTemplate).join('') : '<div class="proposal-empty">Домашние задания ещё не добавлены</div>';
 
-  let list = allHomework;
-  if (activeHomeworkFilter === 'assigned') list = list.filter(item => item.status === 'assigned');
-  if (activeHomeworkFilter === 'attention') list = list.filter(item => ['known', 'unknown'].includes(item.status));
-  $('#homework-full').innerHTML = list.length ? list.map(homeworkTemplate).join('') : '<div class="panel proposal-empty">По этому фильтру ничего нет</div>';
+  const groups = allHomework.reduce((result, item) => {
+    (result[item.date] ||= []).push(item);
+    return result;
+  }, {});
+  $('#homework-full').innerHTML = allHomework.length ? Object.entries(groups).map(([date, items]) => {
+    const title = dateFromKey(date).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+    return `<section class="homework-day"><h2>${escapeHtml(title)}</h2><div class="homework-list">${items.map(homeworkTemplate).join('')}</div></section>`;
+  }).join('') : '<div class="panel proposal-empty">На выбранный период уроков нет</div>';
   $('#updated-label').textContent = `Последнее обновление: ${formatUpdated(appState.meta.updatedAt)}`;
 }
 
@@ -177,11 +284,16 @@ function changeFor(day, lesson, date) {
   return appState.scheduleChanges.find(change => change.day === day && Number(change.lesson) === lesson && (!change.date || change.date === key));
 }
 
+function homeworkStatusFor(date, lesson, subject) {
+  return homeworkForLesson(date, lesson, subject)?.status || 'unknown';
+}
+
 function renderSchedule() {
   const dayKeys = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   const now = new Date();
   const todayKey = dayKeys[now.getDay()];
   const today = appState.schedule.find(day => day.day === todayKey);
+  const todayOff = dayOffInfo(now);
   const monday = mondayFor();
   const saturday = scheduleDate(5);
   const selectedDates = appState.schedule.map((_, index) => scheduleDate(index));
@@ -191,30 +303,32 @@ function renderSchedule() {
   const rangeStart = monday.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   const rangeEnd = saturday.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: monday.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
   $('#week-label').textContent = `${rangeStart} — ${rangeEnd}`;
-  $('#summary-lessons').textContent = today?.lessons.length || 0;
-  $('#next-lesson').textContent = today?.lessons[0] ? `первый — ${today.lessons[0]}` : 'уроков сегодня нет';
+  $('#summary-lessons').textContent = todayOff ? 0 : today?.lessons.length || 0;
+  $('#next-lesson').textContent = todayOff ? todayOff.name : today?.lessons[0] ? `первый — ${displaySubjectName(today.lessons[0])}` : 'уроков сегодня нет';
   $('#summary-changes').textContent = visibleChanges.length;
   $('#schedule-alert').hidden = visibleChanges.length === 0;
   $('#notification-button').hidden = visibleChanges.length === 0;
   $('#changes-summary-card').hidden = visibleChanges.length === 0;
 
-  $('#today-lessons').innerHTML = (today?.lessons || []).slice(0, 5).map((lesson, index) => {
+  $('#today-lessons').innerHTML = todayOff ? `<div class="day-off-empty"><b>${escapeHtml(todayOff.name)}</b><small>Сегодня уроков нет</small></div>` : (today?.lessons || []).slice(0, 5).map((lesson, index) => {
     const change = changeFor(today.day, index + 1, now);
     const displayed = change?.type === 'replacement' ? change.to : lesson;
     const bell = bellFor(today.day, index);
-    return `<div class="lesson-row"><span class="lesson-number">${index + 1}</span><div><b>${escapeHtml(displayed)}</b>${change ? `<small>${change.type === 'cancelled' ? 'Отменён' : 'Замена'}</small>` : ''}</div><span class="lesson-time">${bell ? `${bell.start}–${bell.end}` : 'время уточняется'}</span></div>`;
+    return `<div class="lesson-row"><span class="mini-subject-icon">${subjectIcon(displayed)}</span><div><b>${escapeHtml(displaySubjectName(displayed))}</b>${change ? `<small>${change.type === 'cancelled' ? 'Отменён' : 'Замена'}</small>` : ''}</div><span class="lesson-time">${bell ? `${bell.start}–${bell.end}` : 'время уточняется'}</span></div>`;
   }).join('');
 
   $('#schedule-board').innerHTML = appState.schedule.map((day, dayIndex) => {
     const calendarDate = selectedDates[dayIndex];
     const isToday = dateKey(calendarDate) === dateKey(now);
+    const off = dayOffInfo(calendarDate);
     return `<section class="day-column ${isToday ? 'today' : ''}" data-date="${dateKey(calendarDate)}">
     <div class="day-header"><div><b>${escapeHtml(day.day)}</b><small>${calendarDate.toLocaleDateString('ru-RU', { month: 'short' })}</small></div><span>${calendarDate.getDate()}</span></div>
-    ${day.lessons.map((lesson, index) => {
+    ${off ? `<div class="full-day-off"><span>☀</span><b>${escapeHtml(off.name)}</b><small>Учебных занятий нет</small></div>` : day.lessons.map((lesson, index) => {
       const change = changeFor(day.day, index + 1, calendarDate);
       const isCancelled = change?.type === 'cancelled';
       const displayLesson = change?.type === 'replacement' ? change.to : lesson;
       const className = isCancelled ? 'cancelled' : change ? 'changed' : '';
+      const homeworkStatus = isCancelled ? '' : homeworkStatusFor(calendarDate, index + 1, displayLesson);
       const bell = bellFor(day.day, index);
       const timeLabel = bell ? `${bell.start}–${bell.end}` : 'время уточняется';
       const detail = change
@@ -223,8 +337,9 @@ function renderSchedule() {
       return `<div class="schedule-lesson ${className}">
         ${change ? `<span class="change-badge">${isCancelled ? 'отмена' : 'замена'}</span>` : ''}
         <span class="lesson-index">${index + 1} урок · ${timeLabel}</span>
-        <b>${escapeHtml(displayLesson)}</b>
+        <div class="schedule-subject"><span class="mini-subject-icon">${subjectIcon(displayLesson)}</span><b>${escapeHtml(displaySubjectName(displayLesson))}</b></div>
         <small>${escapeHtml(detail)}</small>
+        ${homeworkStatus ? `<span class="schedule-hw-status" data-status="${homeworkStatus}" title="${escapeHtml(statusMeta[homeworkStatus].label)}"><i></i>${escapeHtml(statusMeta[homeworkStatus].short)}</span>` : ''}
       </div>`;
     }).join('')}
   </section>`;
@@ -310,10 +425,11 @@ function renderAdmin() {
   const select = $('#admin-hw-id');
   const selected = select.value;
   const subjects = subjectsFromSchedule();
-  select.innerHTML = subjects.map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`).join('');
+  select.innerHTML = subjects.map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
   if (selected && subjects.includes(selected)) select.value = selected;
-  syncAdminHomeworkFields();
+  if (!adminHomeworkDirty) syncAdminHomeworkLessons();
   $('#proposal-list').innerHTML = appState.proposals.length ? appState.proposals.map(item => `<article class="proposal-item"><b>${escapeHtml(item.subject)}</b><p>${escapeHtml(item.text)}</p><small>${escapeHtml(item.author)} · ожидает модерации</small></article>`).join('') : '<div class="proposal-empty">Новых предложений пока нет</div>';
+  $('#day-off-list').innerHTML = (appState.scheduleChanges || []).filter(item => item.type === 'day_off').map(item => `<span>${escapeHtml(item.date)} · ${escapeHtml(item.note || 'Выходной')}</span>`).join('') || '<span>Дополнительных выходных нет</span>';
   renderAdminSupplies();
 }
 
@@ -329,9 +445,42 @@ function renderAdminSupplies() {
 }
 
 function syncAdminHomeworkFields() {
-  const item = appState.homework.find(entry => entry.subject === $('#admin-hw-id').value);
+  const date = $('#admin-hw-date').value;
+  const lesson = Number($('#admin-hw-lesson').value);
+  const item = appState.homework.find(entry => entry.date === date && Number(entry.lesson) === lesson);
   $('#admin-hw-status').value = item?.status || 'unknown';
   $('#admin-hw-task').value = item?.task || '';
+}
+
+function dateFromKey(value) {
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function syncAdminHomeworkLessons() {
+  const date = dateFromKey($('#admin-hw-date').value || defaultSchoolDate());
+  const day = instructionDay(date);
+  const lessonSelect = $('#admin-hw-lesson');
+  const previous = Number(lessonSelect.value) || 1;
+  lessonSelect.innerHTML = (day?.lessons || []).map((subject, index) => {
+    const change = changeFor(day.day, index + 1, date);
+    const effective = change?.type === 'replacement' && change.to ? change.to : subject;
+    const suffix = change?.type === 'cancelled' ? ' — отменён' : change?.type === 'replacement' ? ' — замена' : '';
+    return `<option value="${index + 1}" ${change?.type === 'cancelled' ? 'disabled' : ''}>${index + 1}. ${escapeHtml(displaySubjectName(effective))}${suffix}</option>`;
+  }).join('');
+  if (!day) lessonSelect.innerHTML = '<option value="">В этот день уроков нет</option>';
+  if ([...lessonSelect.options].some(option => Number(option.value) === previous && !option.disabled)) lessonSelect.value = String(previous);
+  const lesson = Number(lessonSelect.value);
+  const baseSubject = day?.lessons[lesson - 1];
+  const change = day && changeFor(day.day, lesson, date);
+  const effective = change?.type === 'replacement' && change.to ? change.to : baseSubject;
+  if (effective) {
+    if (![...$('#admin-hw-id').options].some(option => option.value === effective)) {
+      $('#admin-hw-id').insertAdjacentHTML('beforeend', `<option value="${escapeHtml(effective)}">${escapeHtml(displaySubjectName(effective))}</option>`);
+    }
+    $('#admin-hw-id').value = effective;
+  }
+  syncAdminHomeworkFields();
 }
 
 function renderAll() {
@@ -341,7 +490,10 @@ function renderAll() {
   renderSupplies();
   renderCoordinates();
   renderAdmin();
-  $('#proposal-subject').innerHTML = subjectsFromSchedule().map(subject => `<option>${escapeHtml(subject)}</option>`).join('');
+  $('#proposal-subject').innerHTML = subjectsFromSchedule().map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
+  const changeSelected = $('#change-to').value;
+  $('#change-to').innerHTML = subjectsFromSchedule().map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
+  if ([...$('#change-to').options].some(option => option.value === changeSelected)) $('#change-to').value = changeSelected;
 }
 
 function navigate(route) {
@@ -354,6 +506,7 @@ function navigate(route) {
 function applyUser(user) {
   currentUser = user;
   currentRole = user.role;
+  localStorage.setItem('alegieri-user', JSON.stringify(user));
   const roleLabel = user.role === 'admin' ? 'Администратор' : 'Ученик';
   $('#profile-name').textContent = user.displayName;
   $('#profile-avatar').textContent = user.displayName.slice(0, 1).toUpperCase();
@@ -401,6 +554,15 @@ function scheduleSupplySave(item) {
   supplySaveTimers.set(item.id, timer);
 }
 
+function syncChangeFields() {
+  const type = $('#change-type').value;
+  const wholeDay = ['day_off', 'working_day'].includes(type);
+  $('#change-lesson-label').classList.toggle('field-disabled', wholeDay);
+  $('#change-subject-label').classList.toggle('field-disabled', type !== 'replacement');
+  $('#change-lesson').disabled = wholeDay;
+  $('#change-to').disabled = type !== 'replacement';
+}
+
 function bindEvents() {
   document.addEventListener('click', event => {
     const routeButton = event.target.closest('[data-route]');
@@ -410,7 +572,7 @@ function bindEvents() {
   $('#homework-filter').addEventListener('click', event => {
     const button = event.target.closest('[data-filter]');
     if (!button) return;
-    activeHomeworkFilter = button.dataset.filter;
+    activeHomeworkPeriod = button.dataset.filter;
     $$('#homework-filter button').forEach(item => item.classList.toggle('active', item === button));
     renderHomework();
   });
@@ -508,26 +670,32 @@ function bindEvents() {
   $('#logout-button').addEventListener('click', async () => {
     try { await request('/api/auth/logout', { method: 'POST' }); } catch {}
     localStorage.removeItem('alegieri-state');
+    localStorage.removeItem('alegieri-user');
     if (currentUser) localStorage.removeItem(`alegieri-supplies-${currentUser.id}`);
     $('#profile-menu').hidden = true;
     showAuth();
   });
 
-  $('#admin-hw-id').addEventListener('change', syncAdminHomeworkFields);
+  $('#admin-homework-form').addEventListener('input', event => {
+    if (event.target.matches('#admin-hw-id, #admin-hw-status, #admin-hw-task')) adminHomeworkDirty = true;
+  });
+  $('#admin-hw-date').addEventListener('change', () => { adminHomeworkDirty = false; syncAdminHomeworkLessons(); });
+  $('#admin-hw-lesson').addEventListener('change', () => { adminHomeworkDirty = false; syncAdminHomeworkLessons(); });
   $('#admin-homework-form').addEventListener('submit', async event => {
     event.preventDefault();
     try {
-      await request('/api/admin/homework', { method: 'POST', body: JSON.stringify({ subject: $('#admin-hw-id').value, status: $('#admin-hw-status').value, task: $('#admin-hw-task').value }) });
-      showToast('Домашнее задание обновлено'); await loadState({ quiet: true });
+      await request('/api/admin/homework', { method: 'POST', body: JSON.stringify({ date: $('#admin-hw-date').value, lesson: Number($('#admin-hw-lesson').value), subject: $('#admin-hw-id').value, status: $('#admin-hw-status').value, task: $('#admin-hw-task').value }) });
+      adminHomeworkDirty = false; showToast('Домашнее задание обновлено'); await loadState({ quiet: true });
     } catch (error) { showToast(error.message); }
   });
   $('#admin-change-form').addEventListener('submit', async event => {
     event.preventDefault();
     try {
       await request('/api/admin/schedule-change', { method: 'POST', body: JSON.stringify({ date: $('#change-date').value, lesson: $('#change-lesson').value, type: $('#change-type').value, to: $('#change-to').value, note: $('#change-note').value }) });
-      showToast('Изменение добавлено'); event.target.reset(); $('#change-date').value = defaultSchoolDate(); await loadState({ quiet: true });
+      showToast('Изменение сохранено'); event.target.reset(); $('#change-date').value = defaultSchoolDate(); syncChangeFields(); await loadState({ quiet: true });
     } catch (error) { showToast(error.message); }
   });
+  $('#change-type').addEventListener('change', syncChangeFields);
   $('#admin-supplies').addEventListener('click', async event => {
     const button = event.target.closest('.save-recommendation');
     const row = event.target.closest('[data-admin-supply]');
@@ -569,19 +737,38 @@ function bindAuthEvents() {
 }
 
 async function init() {
+  if ('caches' in window) {
+    const cacheNames = await caches.keys().catch(() => []);
+    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v2-4').map(name => caches.delete(name)));
+  }
   const sidebarCollapsed = localStorage.getItem('alegieri-sidebar-collapsed') === 'true';
   document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
   $('#sidebar-toggle').textContent = sidebarCollapsed ? '☷' : '☰';
   $('#change-date').value = defaultSchoolDate();
+  $('#admin-hw-date').value = defaultSchoolDate();
+  syncChangeFields();
   bindAuthEvents();
   bindEvents();
   const initialRoute = location.hash.slice(1);
   navigate(['today', 'homework', 'schedule', 'supplies', 'coordinates', 'admin'].includes(initialRoute) ? initialRoute : 'today');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=1', { updateViaCache: 'none' }).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=2.4', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
   try {
     const user = await request('/api/me');
     await showApp(user);
-  } catch { showAuth(); }
+  } catch (error) {
+    const cachedUser = localStorage.getItem('alegieri-user');
+    if (error.status !== 401 && currentUser) {
+      console.error(error);
+      $('#auth-screen').hidden = true;
+      $('#app-shell').hidden = false;
+      showToast('Не удалось обновить часть интерфейса — повторите попытку');
+    } else if (error.status !== 401 && cachedUser) {
+      try {
+        await showApp(JSON.parse(cachedUser));
+        showToast('Сервер временно недоступен — показана сохранённая копия');
+      } catch { showAuth(); }
+    } else showAuth();
+  }
   setInterval(() => { if (currentUser) loadState({ quiet: true }); }, 60_000);
 }
 

@@ -1,4 +1,4 @@
-const { chromium } = require('C:/Users/Ilunya/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 
 (async () => {
   const appUrl = process.env.CLASSCOMPASS_URL || 'http://127.0.0.1:4173';
