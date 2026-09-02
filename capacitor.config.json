@@ -1,0 +1,14 @@
+{
+  "appId": "ru.alegieri.school",
+  "appName": "Алегьери",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

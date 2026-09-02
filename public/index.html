@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#5b4be7">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Алегьери">
+  <meta name="description" content="Дневник, расписание и помощник одного класса">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg?v=1">
+  <link rel="stylesheet" href="/styles.css?v=1">
+  <title>Алегьери</title>
+</head>
+<body>
+  <section class="auth-screen" id="auth-screen">
+    <div class="auth-identity">
+      <img src="/icon.svg?v=1" alt="Логотип Алегьери">
+      <div><p>УЧЕБНОЕ ПРОСТРАНСТВО</p><h1>Алегьери</h1><span>Всё важное для 9 В — в одном месте.</span></div>
+    </div>
+    <div class="auth-card">
+      <div class="auth-heading"><p class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</p><h2 id="auth-title">Вход в аккаунт</h2><p id="auth-subtitle">Введите логин и пароль, чтобы продолжить.</p></div>
+      <div class="segmented auth-tabs"><button class="active" data-auth-tab="login">Вход</button><button data-auth-tab="register">Регистрация</button></div>
+      <form id="login-form" class="auth-form">
+        <label>Логин<input id="login-username" autocomplete="username" required placeholder="Ваш логин"></label>
+        <label>Пароль<input id="login-password" type="password" autocomplete="current-password" required placeholder="Ваш пароль"></label>
+        <button class="primary-button" type="submit">Войти</button>
+      </form>
+      <form id="register-form" class="auth-form" hidden>
+        <label>Имя<input id="register-name" autocomplete="name" required maxlength="60" placeholder="Как к вам обращаться"></label>
+        <label>Логин<input id="register-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Придумайте логин"></label>
+        <label>Пароль<input id="register-password" type="password" autocomplete="new-password" required minlength="8" placeholder="Не менее 8 символов"></label>
+        <button class="primary-button" type="submit">Создать аккаунт</button>
+      </form>
+      <p class="auth-error" id="auth-error" role="alert"></p>
+      <small class="auth-note">Ваши личные данные и принадлежности доступны только после входа.</small>
+    </div>
+    <p class="auth-version">Алегьери · версия 1.0</p>
+  </section>
+
+  <div class="app-shell" id="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#today" data-route="today" aria-label="Алегьери">
+        <span class="brand-mark"><img src="/icon.svg?v=1" alt=""></span>
+        <span><b>Алегьери</b><small>9 В</small></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Основная навигация">
+        <button class="nav-item active" data-route="today"><span class="nav-icon">⌂</span><span>Сегодня</span></button>
+        <button class="nav-item" data-route="homework"><span class="nav-icon">✓</span><span>Дневник</span><span class="nav-count" id="homework-count">0</span></button>
+        <button class="nav-item" data-route="schedule"><span class="nav-icon">▦</span><span>Расписание</span></button>
+        <button class="nav-item" data-route="supplies"><span class="nav-icon">◫</span><span>Принадлежности</span></button>
+        <button class="nav-item" data-route="coordinates"><span class="nav-icon">⌖</span><span>Координаты</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="nav-item admin-link" data-route="admin"><span class="nav-icon">⚙</span><span>Управление</span></button>
+        <div class="class-chip"><span id="class-name">9 В</span><div><b>Ваш класс</b><small id="class-term">Расписание загружено</small></div></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark"><img src="/icon.svg?v=1" alt=""></span><b>Алегьери</b></div>
+        <button class="icon-button sidebar-toggle" id="sidebar-toggle" title="Скрыть или показать левое меню" aria-label="Скрыть или показать левое меню">☰</button>
+        <div class="sync-state" id="sync-state" title="Состояние соединения">
+          <span class="sync-dot"></span><span class="sync-text">Подключение…</span>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="install-button" hidden title="Установить приложение">⇩</button>
+          <button class="icon-button notification-button" id="notification-button" data-route="schedule" title="Изменения в расписании" hidden>♢<span></span></button>
+          <button class="profile-button" id="profile-button">
+            <span class="avatar" id="profile-avatar">У</span><span class="profile-text"><b id="profile-name">Ученик</b><small id="role-label">Ученик</small></span><span>⌄</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="page-wrap">
+        <section class="page active" data-page="today">
+          <div class="welcome-row">
+            <div><p class="eyebrow" id="today-date">СЕГОДНЯ</p><h1 id="welcome-title">Доброе утро! <span>👋</span></h1><p>Вот что важно сегодня. Всё актуально и уже собрано в одном месте.</p></div>
+            <button class="primary-button" data-route="homework"><span>＋</span> Предложить ДЗ</button>
+          </div>
+
+          <div class="summary-grid">
+            <article class="summary-card purple"><div class="summary-icon">✓</div><div><small>Домашние задания</small><strong id="summary-homework">0</strong><span>нужно выполнить</span></div><button data-route="homework">›</button></article>
+            <article class="summary-card blue"><div class="summary-icon">▦</div><div><small>Уроки сегодня</small><strong id="summary-lessons">0</strong><span id="next-lesson">следующий урок</span></div><button data-route="schedule">›</button></article>
+            <article class="summary-card orange" id="changes-summary-card" hidden><div class="summary-icon">!</div><div><small>Изменения</small><strong id="summary-changes">0</strong><span>в расписании недели</span></div><button data-route="schedule">›</button></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel homework-preview-panel">
+              <div class="panel-heading"><div><p class="eyebrow">ДНЕВНИК</p><h2>Ближайшие задания</h2></div><button class="text-button" data-route="homework">Все задания <span>→</span></button></div>
+              <div id="homework-preview" class="homework-list compact"></div>
+            </section>
+            <aside class="dashboard-side">
+              <section class="panel day-plan-panel">
+                <div class="panel-heading"><div><p class="eyebrow">СЕГОДНЯ</p><h2>Расписание дня</h2></div><button class="tiny-button" data-route="schedule">▦</button></div>
+                <div id="today-lessons" class="lesson-list"></div>
+              </section>
+              <section class="panel tip-card">
+                <div class="tip-icon">✦</div><div><h3>Совет на день</h3><p>Собери рюкзак вечером — утром останется больше времени.</p></div><button data-route="supplies">Проверить</button>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page" data-page="homework">
+          <div class="page-heading"><div><p class="eyebrow">ЭЛЕКТРОННЫЙ ДНЕВНИК</p><h1>Домашние задания</h1><p>Актуальная информация по предметам и срокам.</p></div><button class="primary-button" id="open-proposal">＋ Предложить ДЗ</button></div>
+          <div class="status-legend">
+            <span><i class="assigned"></i>Задано</span><span><i class="known"></i>Известно, что задано</span><span><i class="unknown"></i>О ДЗ неизвестно</span><span><i class="none"></i>Нет ДЗ</span>
+          </div>
+          <div class="filter-row"><div class="segmented" id="homework-filter"><button class="active" data-filter="all">Все</button><button data-filter="assigned">Нужно сделать</button><button data-filter="attention">Без информации</button></div><span class="updated-label" id="updated-label">Последнее обновление: —</span></div>
+          <div id="homework-full" class="homework-list"></div>
+        </section>
+
+        <section class="page" data-page="schedule">
+          <div class="page-heading"><div><p class="eyebrow">КАЛЕНДАРЬ</p><h1>Расписание</h1><p>Уроки, замены и отмены на неделю.</p></div><div class="week-picker"><button id="previous-week" aria-label="Предыдущая неделя">‹</button><button class="today-week" id="current-week">Сегодня</button><span id="week-label">Учебная неделя</span><button id="next-week" aria-label="Следующая неделя">›</button></div></div>
+          <div class="schedule-alert" id="schedule-alert"><span>!</span><div><b>На этой неделе есть изменения</b><p>Замены и отмены выделены прямо в расписании.</p></div></div>
+          <div class="schedule-board" id="schedule-board"></div>
+        </section>
+
+        <section class="page" data-page="supplies">
+          <div class="page-heading"><div><p class="eyebrow">ЛИЧНОЕ</p><h1>Мои принадлежности</h1><p>Отмечай, что уже есть, и ничего не забудешь.</p></div><button class="secondary-button" id="reset-supplies">↻ Сбросить изменения</button></div>
+          <div class="supplies-summary panel"><div class="bag-visual">▣</div><div class="supply-score"><p class="eyebrow">ГОТОВНОСТЬ</p><strong id="supply-percent">0%</strong><p id="supply-summary-text">Проверяем содержимое рюкзака…</p></div><div class="progress-ring" id="progress-ring"><span></span></div></div>
+          <div class="section-title"><div><h2>Список вещей</h2><p>Изменения сохраняются только в вашем профиле.</p></div><span class="privacy-chip">⌾ Личные данные</span></div>
+          <div class="supplies-grid" id="supplies-grid"></div>
+        </section>
+
+        <section class="page" data-page="coordinates">
+          <div class="page-heading"><div><p class="eyebrow">КАРТА КЛАССА</p><h1>Координаты</h1><p>Наглядное расположение по двум характеристикам от −20 до +20.</p></div></div>
+          <div class="coordinate-tabs segmented"><button class="active" data-map="subjects">Предметы</button><button data-map="teachers">Учителя</button></div>
+          <div class="coordinate-layout">
+            <section class="panel map-panel"><div class="map-heading"><div><h2 id="map-title">Карта предметов</h2><p id="map-description">Важность и субъективная сложность</p></div><span class="admin-curated">✦ Заполняет администратор</span></div><div class="coordinate-editor" id="coordinate-editor" hidden><select id="coordinate-object" aria-label="Выберите предмет"></select><input id="coordinate-new-name" placeholder="Имя учителя" hidden><button class="secondary-button" id="add-coordinate">＋ Добавить точку</button><small>Зажмите точку и перетащите её мышью</small></div><div class="coordinate-map" id="coordinate-map"></div></section>
+            <aside class="panel coordinate-detail" id="coordinate-detail"><div class="empty-detail"><span>⌖</span><h3>Выберите точку</h3><p>Здесь появятся координаты и подробное описание.</p></div></aside>
+          </div>
+        </section>
+
+        <section class="page" data-page="admin">
+          <div class="page-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ</p><h1>Панель администратора</h1><p>Обновление дневника, расписания и проверка предложений.</p></div><span class="role-warning" id="role-warning">Демо-режим администратора</span></div>
+          <div class="admin-grid">
+            <section class="panel admin-card"><div class="admin-icon purple">✓</div><h2>Статусы ДЗ</h2><p>Выберите предмет и установите актуальный статус.</p><form id="admin-homework-form"><label>Предмет<select id="admin-hw-id"></select></label><label>Статус<select id="admin-hw-status"><option value="assigned">Задано</option><option value="known">Известно, что задано</option><option value="unknown">О ДЗ неизвестно</option><option value="none">Нет ДЗ</option></select></label><label>Текст задания<textarea id="admin-hw-task" rows="3"></textarea></label><button class="primary-button" type="submit">Сохранить</button></form></section>
+            <section class="panel admin-card"><div class="admin-icon orange">▦</div><h2>Изменение расписания</h2><p>Добавьте замену предмета, учителя или отмену на конкретную дату.</p><form id="admin-change-form"><div class="form-row"><label>Дата<input id="change-date" type="date" required></label><label>Урок<input id="change-lesson" type="number" min="1" max="7" value="1"></label></div><label>Тип<select id="change-type"><option value="replacement">Замена</option><option value="cancelled">Отмена</option></select></label><label>Новый предмет<input id="change-to" placeholder="Например, География"></label><label>Учитель и примечание<input id="change-note" placeholder="Учитель, кабинет или причина"></label><button class="primary-button" type="submit">Добавить изменение</button></form></section>
+            <section class="panel admin-card proposals-card"><div class="admin-icon blue">✦</div><h2>Предложения учеников</h2><p>Новые варианты домашних заданий попадут сюда.</p><div id="proposal-list" class="proposal-list"></div></section>
+            <section class="panel admin-card supply-admin-card"><div class="admin-icon purple">◫</div><h2>Рекомендации по принадлежностям</h2><p>Настройте количество и уровень необходимости для каждого предмета.</p><div id="admin-supplies" class="admin-supplies"></div></section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Мобильная навигация">
+      <button class="active" data-route="today"><span>⌂</span><small>Сегодня</small></button>
+      <button data-route="homework"><span>✓</span><small>Дневник</small></button>
+      <button data-route="schedule"><span>▦</span><small>Уроки</small></button>
+      <button data-route="supplies"><span>◫</span><small>Вещи</small></button>
+      <button data-route="coordinates"><span>⌖</span><small>Карта</small></button>
+    </nav>
+  </div>
+
+  <dialog id="proposal-dialog">
+    <form method="dialog" class="dialog-card" id="proposal-form">
+      <div class="dialog-heading"><div><p class="eyebrow">ПРЕДЛОЖЕНИЕ</p><h2>Добавить домашнее задание</h2></div><button value="cancel" class="close-button" aria-label="Закрыть">×</button></div>
+      <p>Предложение увидит администратор. После проверки оно появится в дневнике.</p>
+      <label>Предмет<select id="proposal-subject" required></select></label>
+      <label>Задание<textarea id="proposal-text" rows="4" required placeholder="Напишите номер упражнения, страницу и детали"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary-button">Отмена</button><button class="primary-button" id="send-proposal" type="submit">Отправить на модерацию</button></div>
+    </form>
+  </dialog>
+
+  <div class="profile-menu" id="profile-menu" hidden>
+    <div class="profile-menu-account"><b id="profile-menu-name">Ученик</b><small id="profile-menu-role">Ученик</small></div>
+    <button id="logout-button">Выйти из аккаунта</button>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/app.js?v=1" defer></script>
+</body>
+</html>
