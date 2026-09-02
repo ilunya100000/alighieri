@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Алегьери">
+  <defs>
+    <linearGradient id="night" x1="74" y1="40" x2="438" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F5AF4"/>
+      <stop offset="1" stop-color="#342479"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="180" y1="125" x2="344" y2="397" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE4A3"/>
+      <stop offset="1" stop-color="#F3A93B"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#20144F" flood-opacity=".35"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="128" fill="url(#night)"/>
+  <path d="M95 352c54-26 104-30 151-12v-169c-42-28-94-29-151-5v186Zm322 0c-54-26-104-30-151-12v-169c42-28 94-29 151-5v186Z" fill="#fff" opacity=".96" filter="url(#shadow)"/>
+  <path d="M256 171v169" stroke="#D7D0FF" stroke-width="11" stroke-linecap="round"/>
+  <path d="M175 359 247 137c3-10 15-15 24-10 5 3 9 8 11 14l67 218h-52l-13-49h-68l-14 49h-27Zm53-92h45l-21-83-24 83Z" fill="url(#gold)"/>
+  <path d="M116 387c48-17 94-17 140 2 46-19 93-19 140-2" fill="none" stroke="#F6C666" stroke-width="13" stroke-linecap="round"/>
+</svg>

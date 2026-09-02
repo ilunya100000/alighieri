@@ -1,0 +1,14 @@
+{
+  "id": "/",
+  "name": "Алегьери",
+  "short_name": "Алегьери",
+  "description": "Дневник, расписание и помощник одного класса",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#5745d7",
+  "lang": "ru",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

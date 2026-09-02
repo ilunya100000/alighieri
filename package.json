@@ -1,0 +1,15 @@
+{
+  "name": "alegieri",
+  "version": "1.0.0",
+  "private": true,
+  "author": "ilunya100000",
+  "description": "Алегьери — учебное PWA-приложение для 9 В",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tests.mjs",
+    "setup-admin": "node setup-admin.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
