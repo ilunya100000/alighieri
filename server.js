@@ -291,7 +291,7 @@ async function api(req, res, url) {
     if (!map || !String(input.name || '').trim()) return json(res, 400, { error: 'Укажите карту и название точки' });
     const state = readState();
     const points = state.coordinates[map];
-    let point = points.find(entry => entry.id === input.id || entry.name === input.name);
+    let point = points.find(entry => entry.id === input.id || (!input.id && entry.name === input.name));
     if (!point) {
       point = {
         id: `${map === 'subjects' ? 's' : 't'}-${Date.now()}`,
@@ -305,6 +305,7 @@ async function api(req, res, url) {
     }
     point.x = Math.max(-20, Math.min(20, Math.round(Number(input.x) || 0)));
     point.y = Math.max(-20, Math.min(20, Math.round(Number(input.y) || 0)));
+    point.name = String(input.name).trim().slice(0, 100);
     if (input.description !== undefined) point.description = String(input.description).slice(0, 800);
     writeState(state);
     return json(res, 200, point);
@@ -347,9 +348,9 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (url.pathname === '/' && url.searchParams.get('release') === '1') {
+    if (url.pathname === '/' && ['1', '2.2', '2.4'].includes(url.searchParams.get('release'))) {
       res.writeHead(302, {
-        Location: '/?release=2.4',
+        Location: '/?release=2.5',
         'Cache-Control': 'no-store, max-age=0',
         'Clear-Site-Data': '"cache"'
       });
@@ -368,3 +369,4 @@ server.listen(PORT, HOST, () => {
   console.log(`Алегьери v2 запущен: http://localhost:${PORT}`);
   console.log('Для устройств в одной сети используйте IP этого компьютера и тот же порт.');
 });
+

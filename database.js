@@ -229,3 +229,4 @@ module.exports = {
   createSession, userFromToken, deleteSession, getSupplies, setSupplyCount,
   setSupplyRecommendation, syncSupplyCatalog
 };
+

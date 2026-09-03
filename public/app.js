@@ -72,6 +72,12 @@ function displaySubjectName(subject = '') {
   return subject === 'Английский язык (Разговорный практикум)' ? 'Английский язык (Р)' : subject;
 }
 
+function teacherShortName(name = '') {
+  const words = String(name).split('·')[0].trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return String(name).split('·')[0].trim();
+  return `${words[0]} ${words.slice(1).map(word => `${word.slice(0, 1)}.`).join(' ')}`;
+}
+
 function subjectIcon(subject = '') {
   const value = subject.toLocaleLowerCase('ru-RU');
   let paths = '<path d="M5 5.5h14v13H5z"/><path d="M9 5.5v13"/>';
@@ -373,7 +379,7 @@ function renderSupplies() {
 function mapLabels() {
   return activeMap === 'subjects'
     ? { title: 'Карта предметов', description: 'Важность и субъективная сложность', top: 'Сложнее +20', bottom: 'Легче −20', left: 'Менее важно −20', right: 'Важнее +20', x: 'Важность', y: 'Сложность' }
-    : { title: 'Карта учителей', description: 'Сила преподавания и характер', top: 'Мягче +20', bottom: 'Строже −20', left: 'Слабее −20', right: 'Сильнее +20', x: 'Как учит', y: 'Характер' };
+    : { title: 'Карта учителей', description: 'Характер и сила преподавания', top: 'Сильнее +20', bottom: 'Слабее −20', left: 'Строже −20', right: 'Добрее +20', x: 'Характер', y: 'Как учит' };
 }
 
 function renderCoordinates() {
@@ -381,11 +387,14 @@ function renderCoordinates() {
   $('#map-title').textContent = labels.title;
   $('#map-description').textContent = labels.description;
   const points = appState.coordinates[activeMap] || [];
+  const subjectMap = activeMap === 'subjects';
   const map = $('#coordinate-map');
   map.innerHTML = `<span class="axis-label axis-top">${labels.top}</span><span class="axis-label axis-bottom">${labels.bottom}</span><span class="axis-label axis-left">${labels.left}</span><span class="axis-label axis-right">${labels.right}</span>${points.map(point => {
     const left = 5 + ((Number(point.x) + 20) / 40) * 90;
     const bottom = 5 + ((Number(point.y) + 20) / 40) * 90;
-    return `<button class="map-point ${currentRole === 'admin' ? 'draggable' : ''}" style="left:${left}%;bottom:${bottom}%;--point:${escapeHtml(point.color)}" data-point="${escapeHtml(point.id)}" data-name="${escapeHtml(point.name)}" aria-label="${escapeHtml(point.name)}"></button>`;
+    const label = subjectMap ? displaySubjectName(point.name) : teacherShortName(point.name);
+    const icon = subjectMap ? `<span class="map-point-icon">${subjectIcon(point.name)}</span>` : '';
+    return `<button class="map-point ${subjectMap ? 'subject-map-point' : ''} ${currentRole === 'admin' ? 'draggable' : ''}" style="left:${left}%;bottom:${bottom}%;--point:${escapeHtml(point.color)}" data-point="${escapeHtml(point.id)}" data-name="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icon}</button>`;
   }).join('')}`;
   $('#coordinate-detail').innerHTML = points.length
     ? '<div class="empty-detail"><span>⌖</span><h3>Выберите точку</h3><p>Здесь появятся координаты и подробное описание.</p></div>'
@@ -417,8 +426,25 @@ function showCoordinateDetail(pointId) {
   const point = (appState.coordinates[activeMap] || []).find(item => item.id === pointId);
   if (!point) return;
   const labels = mapLabels();
+  const metric = (name, value, from, to, reverseColors = false) => {
+    const safeValue = Math.max(-20, Math.min(20, Number(value) || 0));
+    const percent = ((safeValue + 20) / 40) * 100;
+    const colorPosition = reverseColors ? 100 - percent : percent;
+    const hue = Math.round(5 + colorPosition * 2.85);
+    return `<section class="coordinate-metric" style="--metric-color:hsl(${hue} 72% 46%)"><div class="coordinate-metric-heading"><h3>${escapeHtml(name)}</h3><strong>${safeValue > 0 ? '+' : ''}${safeValue}</strong></div><div class="coordinate-scale"><span class="coordinate-scale-fill" style="width:${percent}%"></span><i class="coordinate-scale-marker" style="left:${percent}%"></i></div><div class="coordinate-scale-ends"><span>${escapeHtml(from)}</span><span>${escapeHtml(to)}</span></div></section>`;
+  };
+  const subjectPoint = activeMap === 'subjects';
+  const title = subjectPoint ? displaySubjectName(point.name) : teacherShortName(point.name);
+  const visual = subjectPoint ? subjectIcon(point.name) : escapeHtml(title.slice(0, 1));
   $$('.map-point').forEach(button => button.classList.toggle('active', button.dataset.point === pointId));
-  $('#coordinate-detail').innerHTML = `<div class="detail-color" style="--detail:${escapeHtml(point.color)}">${escapeHtml(point.name.slice(0, 1))}</div><h2>${escapeHtml(point.name)}</h2><div class="coordinate-values"><div class="coordinate-value"><small>${labels.x}</small><strong>${point.x > 0 ? '+' : ''}${point.x}</strong></div><div class="coordinate-value"><small>${labels.y}</small><strong>${point.y > 0 ? '+' : ''}${point.y}</strong></div></div><p>${escapeHtml(point.description || 'Описание пока не добавлено.')}</p>${currentRole === 'admin' ? '<p class="drag-hint">Зажмите точку на карте и перетащите её в нужное место.</p>' : ''}`;
+  const editForm = currentRole === 'admin' ? `<form class="coordinate-edit-form" data-coordinate-id="${escapeHtml(point.id)}">
+    <label>Подпись точки<input name="name" maxlength="100" value="${escapeHtml(point.name)}" required></label>
+    <div class="coordinate-edit-values"><label>${labels.x}<input name="x" type="number" min="-20" max="20" value="${Number(point.x)}" required></label><label>${labels.y}<input name="y" type="number" min="-20" max="20" value="${Number(point.y)}" required></label></div>
+    <label>Заметка<textarea name="description" maxlength="800" placeholder="Краткое описание точки">${escapeHtml(point.description || '')}</textarea></label>
+    <button class="secondary-button" type="submit">Сохранить метку</button>
+    <p class="drag-hint">Координаты также можно изменить, перетащив точку на карте.</p>
+  </form>` : `<p>${escapeHtml(point.description || 'Описание пока не добавлено.')}</p>`;
+  $('#coordinate-detail').innerHTML = `<div class="detail-color ${subjectPoint ? 'detail-subject-icon' : ''}" style="--detail:${escapeHtml(point.color)}">${visual}</div><h2>${escapeHtml(title)}</h2><div class="coordinate-metrics">${metric(labels.x, point.x, labels.left, labels.right, !subjectPoint)}${metric(labels.y, point.y, labels.bottom, labels.top, subjectPoint)}</div><p class="coordinate-note">${escapeHtml(point.description || 'Описание пока не добавлено.')}</p>${editForm}`;
 }
 
 function renderAdmin() {
@@ -597,6 +623,31 @@ function bindEvents() {
     const point = event.target.closest('[data-point]');
     if (point) showCoordinateDetail(point.dataset.point);
   });
+  $('#coordinate-detail').addEventListener('submit', async event => {
+    const form = event.target.closest('.coordinate-edit-form');
+    if (!form) return;
+    event.preventDefault();
+    const point = (appState.coordinates[activeMap] || []).find(item => item.id === form.dataset.coordinateId);
+    if (!point) return;
+    const fields = new FormData(form);
+    const payload = {
+      map: activeMap,
+      id: point.id,
+      name: String(fields.get('name') || '').trim(),
+      x: Number(fields.get('x')),
+      y: Number(fields.get('y')),
+      description: String(fields.get('description') || '').trim(),
+      color: point.color
+    };
+    if (!payload.name) return showToast('Укажите подпись точки');
+    try {
+      const saved = await request('/api/admin/coordinate', { method: 'POST', body: JSON.stringify(payload) });
+      Object.assign(point, saved);
+      renderCoordinates();
+      showCoordinateDetail(point.id);
+      showToast('Метка сохранена');
+    } catch (error) { showToast(error.message); }
+  });
   $('#coordinate-new-name').addEventListener('input', renderCoordinateEditor);
   $('#add-coordinate').addEventListener('click', async () => {
     const name = activeMap === 'subjects' ? $('#coordinate-object').value : $('#coordinate-new-name').value.trim();
@@ -751,7 +802,7 @@ async function init() {
   bindEvents();
   const initialRoute = location.hash.slice(1);
   navigate(['today', 'homework', 'schedule', 'supplies', 'coordinates', 'admin'].includes(initialRoute) ? initialRoute : 'today');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=2.4', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=2.5.2', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
   try {
     const user = await request('/api/me');
     await showApp(user);
@@ -773,3 +824,4 @@ async function init() {
 }
 
 init();
+

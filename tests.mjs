@@ -119,3 +119,4 @@ try {
   await Promise.race([once(server, 'exit'), wait(1500)]);
   rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
+

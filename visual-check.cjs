@@ -26,3 +26,4 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   console.log('OK: интерфейс открылся без ошибок на ПК и мобильном размере');
   await browser.close();
 })().catch(error => { console.error(error); process.exit(1); });
+
