@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   readState, writeState, createUser, authenticate, createSession, userFromToken,
-  deleteSession, getSupplies, setSupplyCount, setSupplyRecommendation
+  deleteSession, getSupplies, setSupplyCount, setSupplyRecommendation, getGrades, addGrade, deleteGrade, getHomeworkProgress, setHomeworkProgress
 } = require('./database');
 
 const PORT = Number(process.env.PORT || 4173);
@@ -157,6 +157,47 @@ async function api(req, res, url) {
     return json(res, 200, readState());
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/time') {
+    if (!requireUser(req, res)) return;
+    return json(res, 200, { now: new Date().toISOString(), timezone: 'Europe/Moscow' });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/grades') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    return json(res, 200, { items: getGrades(user.id) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/homework/progress') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    return json(res, 200, { items: getHomeworkProgress(user.id) });
+  }
+
+  if (req.method === 'PUT' && /^\/api\/homework\/progress\/.+/.test(url.pathname)) {
+    const user = requireUser(req, res);
+    if (!user) return;
+    const homeworkId = decodeURIComponent(url.pathname.slice('/api/homework/progress/'.length));
+    const result = setHomeworkProgress(user.id, homeworkId, Boolean((await bodyFrom(req)).completed));
+    return json(res, 200, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/grades') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') return json(res, 403, { error: 'Оценки станут доступны ученикам с версии 3.0' });
+    const grade = addGrade(user.id, await bodyFrom(req));
+    return json(res, 201, grade);
+  }
+
+  if (req.method === 'DELETE' && /^\/api\/grades\/\d+$/.test(url.pathname)) {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') return json(res, 403, { error: 'Оценки станут доступны ученикам с версии 3.0' });
+    deleteGrade(user.id, Number(url.pathname.split('/').pop()));
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/supplies') {
     const user = requireUser(req, res);
     if (!user) return;
@@ -223,12 +264,15 @@ async function api(req, res, url) {
       };
       state.homework.push(item);
     }
+    const status = ['assigned', 'known', 'unknown', 'none'].includes(input.status) ? input.status : item.status;
+    const task = status === 'assigned' ? String(input.task || '').trim().slice(0, 1000) : '';
+    if (status === 'assigned' && !task) return json(res, 400, { error: 'Для статуса «Задано» укажите текст задания' });
     Object.assign(item, {
       subject,
       date: input.date,
       lesson,
-      status: input.status ?? item.status,
-      task: input.task ?? item.task,
+      status,
+      task,
       dueLabel: input.dueLabel ?? item.dueLabel
     });
     writeState(state);
@@ -348,9 +392,9 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (url.pathname === '/' && ['1', '2.2', '2.4'].includes(url.searchParams.get('release'))) {
+    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5'].includes(url.searchParams.get('release'))) {
       res.writeHead(302, {
-        Location: '/?release=2.5',
+        Location: '/?release=2.6',
         'Cache-Control': 'no-store, max-age=0',
         'Clear-Site-Data': '"cache"'
       });

@@ -11,7 +11,7 @@
   <meta name="description" content="Дневник, расписание и помощник одного класса">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg?v=2.4">
-  <link rel="stylesheet" href="/styles.css?v=2.5.2">
+  <link rel="stylesheet" href="/styles.css?v=2.6">
   <title>Алегьери</title>
 </head>
 <body>
@@ -37,7 +37,7 @@
       <p class="auth-error" id="auth-error" role="alert"></p>
       <small class="auth-note">Ваши личные данные и принадлежности доступны только после входа.</small>
     </div>
-    <p class="auth-version">Алегьери · версия 2.0</p>
+    <p class="auth-version">Алегьери · версия 2.6</p>
   </section>
 
   <div class="app-shell" id="app-shell" hidden>
@@ -52,6 +52,7 @@
         <button class="nav-item" data-route="homework"><span class="nav-icon">✓</span><span>Дневник</span><span class="nav-count" id="homework-count">0</span></button>
         <button class="nav-item" data-route="schedule"><span class="nav-icon">▦</span><span>Расписание</span></button>
         <button class="nav-item" data-route="supplies"><span class="nav-icon">◫</span><span>Принадлежности</span></button>
+        <button class="nav-item" data-route="grades"><span class="nav-icon">★</span><span>Оценки</span></button>
         <button class="nav-item" data-route="coordinates"><span class="nav-icon">⌖</span><span>Координаты</span></button>
       </nav>
 
@@ -85,7 +86,7 @@
           </div>
 
           <div class="summary-grid">
-            <article class="summary-card purple"><div class="summary-icon">✓</div><div><small>Домашние задания</small><strong id="summary-homework">0</strong><span>нужно выполнить</span></div><button data-route="homework">›</button></article>
+            <article class="summary-card purple"><div class="summary-icon">✓</div><div><small>Домашние задания</small><strong id="summary-homework">0%</strong><span id="summary-homework-caption">актуальных заданий нет</span></div><button data-route="homework">›</button></article>
             <article class="summary-card blue"><div class="summary-icon">▦</div><div><small>Уроки сегодня</small><strong id="summary-lessons">0</strong><span id="next-lesson">следующий урок</span></div><button data-route="schedule">›</button></article>
             <article class="summary-card orange" id="changes-summary-card" hidden><div class="summary-icon">!</div><div><small>Изменения</small><strong id="summary-changes">0</strong><span>в расписании недели</span></div><button data-route="schedule">›</button></article>
           </div>
@@ -127,6 +128,15 @@
           <div class="supplies-grid" id="supplies-grid"></div>
         </section>
 
+        <section class="page" data-page="grades">
+          <div class="page-heading"><div><p class="eyebrow">ЛИЧНОЕ</p><h1>Мои оценки</h1><p>Средний балл, прогноз на четверть и динамика по предметам.</p></div></div>
+          <div id="grades-lock" class="panel grades-lock" hidden><span>★</span><h2>С версии 3.0</h2><p>В версии 2.6 раздел оценок доступен только администратору.</p></div>
+          <div id="grades-admin" hidden>
+            <section class="panel grade-entry-panel"><div class="panel-heading"><div><p class="eyebrow">НОВАЯ ОЦЕНКА</p><h2>Добавить оценку</h2></div><span class="privacy-chip">⌾ Личные данные</span></div><form id="grade-form"><div class="form-row"><label>Предмет<select id="grade-subject" required></select></label><label>Оценка<select id="grade-value" required><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option></select></label></div><div class="form-row"><label>Тип работы<select id="grade-type" required></select></label><label>Дата<input id="grade-date" type="date" required><small id="grade-date-hint"></small></label></div><label id="grade-homework-label" hidden>Связать с ДЗ<select id="grade-homework"><option value="">Не связывать</option></select></label><button class="primary-button" type="submit">Добавить оценку</button></form></section>
+            <div class="grades-overview" id="grades-overview"></div>
+          </div>
+        </section>
+
         <section class="page" data-page="coordinates">
           <div class="page-heading"><div><p class="eyebrow">КАРТА КЛАССА</p><h1>Координаты</h1><p>Наглядное расположение по двум характеристикам от −20 до +20.</p></div></div>
           <div class="coordinate-tabs segmented"><button class="active" data-map="subjects">Предметы</button><button data-map="teachers">Учителя</button></div>
@@ -139,7 +149,7 @@
         <section class="page" data-page="admin">
           <div class="page-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ</p><h1>Панель администратора</h1><p>Обновление дневника, расписания и проверка предложений.</p></div><span class="role-warning" id="role-warning">Демо-режим администратора</span></div>
           <div class="admin-grid">
-            <section class="panel admin-card"><div class="admin-icon purple">✓</div><h2>Домашнее задание урока</h2><p>ДЗ привязано к конкретной дате и уроку, включая замены.</p><form id="admin-homework-form"><div class="form-row"><label>Дата<input id="admin-hw-date" type="date" required></label><label>Урок<select id="admin-hw-lesson"></select></label></div><label>Предмет<select id="admin-hw-id"></select></label><label>Статус<select id="admin-hw-status"><option value="assigned">Задано</option><option value="known">Известно, что задано</option><option value="unknown">О ДЗ неизвестно</option><option value="none">Нет ДЗ</option></select></label><label>Текст задания<textarea id="admin-hw-task" rows="3"></textarea></label><button class="primary-button" type="submit">Сохранить</button></form></section>
+            <section class="panel admin-card"><div class="admin-icon purple">✓</div><h2>Домашнее задание урока</h2><p>ДЗ привязано к конкретной дате и уроку, включая замены.</p><form id="admin-homework-form"><div class="form-row"><label>Дата<input id="admin-hw-date" type="date" required></label><label>Урок<select id="admin-hw-lesson"></select></label></div><label>Предмет<select id="admin-hw-id"></select></label><label>Статус<select id="admin-hw-status"><option value="assigned">Задано</option><option value="known">Известно, что задано</option><option value="unknown">О ДЗ неизвестно</option><option value="none">Нет ДЗ</option></select></label><label id="admin-hw-task-label">Текст задания<textarea id="admin-hw-task" rows="3" required></textarea><small id="admin-hw-task-hint">Обязателен для статуса «Задано».</small></label><button class="primary-button" type="submit">Сохранить</button></form></section>
             <section class="panel admin-card"><div class="admin-icon orange">▦</div><h2>Изменение расписания</h2><p>Добавьте замену, отмену урока или выходной на весь день.</p><form id="admin-change-form"><div class="form-row"><label>Дата<input id="change-date" type="date" required></label><label id="change-lesson-label">Урок<input id="change-lesson" type="number" min="1" max="7" value="1"></label></div><label>Тип<select id="change-type"><option value="replacement">Замена урока</option><option value="cancelled">Отмена урока</option><option value="day_off">Весь день выходной</option><option value="working_day">Вернуть учебный день</option></select></label><label id="change-subject-label">Новый предмет<select id="change-to"></select></label><label>Примечание<input id="change-note" placeholder="Учитель, кабинет или причина"></label><button class="primary-button" type="submit">Сохранить изменение</button></form><div class="day-off-list" id="day-off-list"></div></section>
             <section class="panel admin-card proposals-card"><div class="admin-icon blue">✦</div><h2>Предложения учеников</h2><p>Новые варианты домашних заданий попадут сюда.</p><div id="proposal-list" class="proposal-list"></div></section>
             <section class="panel admin-card supply-admin-card"><div class="admin-icon purple">◫</div><h2>Рекомендации по принадлежностям</h2><p>Настройте количество и уровень необходимости для каждого предмета.</p><div id="admin-supplies" class="admin-supplies"></div></section>
@@ -153,6 +163,7 @@
       <button data-route="homework"><span>✓</span><small>Дневник</small></button>
       <button data-route="schedule"><span>▦</span><small>Уроки</small></button>
       <button data-route="supplies"><span>◫</span><small>Вещи</small></button>
+      <button data-route="grades"><span>★</span><small>Оценки</small></button>
       <button data-route="coordinates"><span>⌖</span><small>Карта</small></button>
     </nav>
   </div>
@@ -172,7 +183,7 @@
     <button id="logout-button">Выйти из аккаунта</button>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/app.js?v=2.5.2" defer></script>
+  <script src="/app.js?v=2.6" defer></script>
 </body>
 </html>
 

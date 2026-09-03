@@ -46,6 +46,25 @@ db.exec(`
     current_count INTEGER NOT NULL DEFAULT 0 CHECK (current_count >= 0),
     PRIMARY KEY (user_id, supply_id)
   );
+  CREATE TABLE IF NOT EXISTS grades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL CHECK (grade BETWEEN 2 AND 5),
+    activity_type TEXT NOT NULL,
+    weight REAL NOT NULL DEFAULT 1 CHECK (weight > 0 AND weight <= 3),
+    grade_date TEXT NOT NULL,
+    homework_date TEXT,
+    homework_lesson INTEGER,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS user_homework_progress (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    homework_id TEXT NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, homework_id)
+  );
 `);
 
 function seedState() {
@@ -220,6 +239,49 @@ function setSupplyRecommendation(supplyId, recommended, necessity) {
   if (!result.changes) throw new Error('Принадлежность не найдена');
 }
 
+function getGrades(userId) {
+  return db.prepare(`SELECT id, subject, grade, activity_type AS activityType, weight,
+    grade_date AS date, homework_date AS homeworkDate, homework_lesson AS homeworkLesson, created_at AS createdAt
+    FROM grades WHERE user_id = ? ORDER BY grade_date DESC, id DESC`).all(userId);
+}
+
+function addGrade(userId, input) {
+  const subject = String(input.subject || '').trim().slice(0, 100);
+  const activityType = String(input.activityType || '').trim().slice(0, 100);
+  const grade = Math.round(Number(input.grade));
+  const weight = Math.max(0.1, Math.min(3, Number(input.weight) || 1));
+  const date = String(input.date || '');
+  if (!subject || !activityType) throw new Error('Укажите предмет и тип оценки');
+  if (!Number.isInteger(grade) || grade < 2 || grade > 5) throw new Error('Оценка должна быть от 2 до 5');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Укажите дату оценки');
+  const homeworkDate = /^\d{4}-\d{2}-\d{2}$/.test(String(input.homeworkDate || '')) ? String(input.homeworkDate) : null;
+  const homeworkLesson = Number.isInteger(Number(input.homeworkLesson)) ? Number(input.homeworkLesson) : null;
+  const result = db.prepare(`INSERT INTO grades (user_id, subject, grade, activity_type, weight, grade_date, homework_date, homework_lesson, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(userId, subject, grade, activityType, weight, date, homeworkDate, homeworkLesson, new Date().toISOString());
+  return db.prepare(`SELECT id, subject, grade, activity_type AS activityType, weight,
+    grade_date AS date, homework_date AS homeworkDate, homework_lesson AS homeworkLesson, created_at AS createdAt
+    FROM grades WHERE id = ?`).get(result.lastInsertRowid);
+}
+
+function deleteGrade(userId, gradeId) {
+  const result = db.prepare('DELETE FROM grades WHERE id = ? AND user_id = ?').run(gradeId, userId);
+  if (!result.changes) throw new Error('Оценка не найдена');
+}
+
+function getHomeworkProgress(userId) {
+  return db.prepare('SELECT homework_id AS homeworkId, completed, updated_at AS updatedAt FROM user_homework_progress WHERE user_id = ?').all(userId);
+}
+
+function setHomeworkProgress(userId, homeworkId, completed) {
+  const id = String(homeworkId || '').trim().slice(0, 120);
+  if (!id) throw new Error('Не указано задание');
+  db.prepare(`INSERT INTO user_homework_progress (user_id, homework_id, completed, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, homework_id) DO UPDATE SET completed = excluded.completed, updated_at = excluded.updated_at`)
+    .run(userId, id, completed ? 1 : 0, new Date().toISOString());
+  return { homeworkId: id, completed: Boolean(completed) };
+}
+
 seedState();
 migrateState();
 syncSupplyCatalog();
@@ -227,6 +289,6 @@ syncSupplyCatalog();
 module.exports = {
   dbPath, readState, writeState, createUser, upsertAdmin, authenticate,
   createSession, userFromToken, deleteSession, getSupplies, setSupplyCount,
-  setSupplyRecommendation, syncSupplyCatalog
+  setSupplyRecommendation, getGrades, addGrade, deleteGrade, getHomeworkProgress, setHomeworkProgress, syncSupplyCatalog
 };
 

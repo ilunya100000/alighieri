@@ -1,5 +1,5 @@
-const CACHE = 'alegieri-v2-5-2';
-const STATIC = ['/?release=2.5', '/index.html', '/styles.css?v=2.5.2', '/app.js?v=2.5.2', '/icon.svg?v=2.5', '/manifest.webmanifest'];
+const CACHE = 'alegieri-v2-6';
+const STATIC = ['/?release=2.6', '/index.html', '/styles.css?v=2.6', '/app.js?v=2.6', '/icon.svg?v=2.5', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)));
