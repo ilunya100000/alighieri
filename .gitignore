@@ -3,3 +3,4 @@ data/*.db-shm
 data/*.db-wal
 *-preview.png
 node_modules/
+.android-tools/

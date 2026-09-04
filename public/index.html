@@ -11,7 +11,7 @@
   <meta name="description" content="Дневник, расписание и помощник одного класса">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg?v=2.4">
-  <link rel="stylesheet" href="/styles.css?v=3.0">
+  <link rel="stylesheet" href="/styles.css?v=3.0.1">
   <title>Алегьери</title>
 </head>
 <body>
@@ -71,6 +71,7 @@
         </div>
         <div class="top-actions">
           <button class="icon-button" id="install-button" hidden title="Установить приложение">⇩</button>
+          <a class="apk-download-button" id="apk-download-button" href="/download/" hidden title="Скачать версию для Android">↓ APK</a>
           <button class="icon-button notification-button" id="notification-button" data-route="schedule" title="Изменения в расписании" hidden>♢<span></span></button>
           <button class="profile-button" id="profile-button">
             <span class="avatar" id="profile-avatar">У</span><span class="profile-text"><b id="profile-name">Ученик</b><small id="role-label">Ученик</small></span><span>⌄</span>
@@ -181,6 +182,6 @@
     <button id="logout-button">Выйти из аккаунта</button>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/app.js?v=3.0" defer></script>
+  <script src="/app.js?v=3.0.1" defer></script>
 </body>
 </html>

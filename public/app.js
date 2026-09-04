@@ -1026,9 +1026,11 @@ function bindAuthEvents() {
 }
 
 async function init() {
+  const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.Capacitor;
+  $('#apk-download-button').hidden = !isMobileBrowser;
   if ('caches' in window) {
     const cacheNames = await caches.keys().catch(() => []);
-    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-0').map(name => caches.delete(name)));
+    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-0-android').map(name => caches.delete(name)));
   }
   const sidebarCollapsed = localStorage.getItem('alegieri-sidebar-collapsed') === 'true';
   document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -1040,7 +1042,7 @@ async function init() {
   bindEvents();
   const initialRoute = location.hash.slice(1);
   navigate(['today', 'homework', 'schedule', 'supplies', 'grades', 'coordinates', 'admin'].includes(initialRoute) ? initialRoute : 'today');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.0', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.0.1', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
   try {
     const user = await request('/api/me');
     await showApp(user);
