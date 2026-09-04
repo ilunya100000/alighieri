@@ -84,6 +84,20 @@ try {
   const updatedState = await (await fetch(`${base}/api/state`, { headers: { Cookie: adminCookie } })).json();
   const linkedHomework = updatedState.homework.find(item => item.date === mondayKey && Number(item.lesson) === 2);
   if (linkedHomework?.subject !== 'География' || linkedHomework.task !== 'Параграф 5') throw new Error('ДЗ не связано с предметом замены');
+  const lessonsResponse = await fetch(`${base}/api/lessons?date=${mondayKey}`, { headers: { Cookie: studentCookie } });
+  const lessons = await lessonsResponse.json();
+  const replacementLesson = lessons.lessons.find(item => item.lesson === 2);
+  if (replacementLesson?.subject !== 'География' || !replacementLesson.replacement) throw new Error('Оценки не получают заменённый урок из расписания');
+  const studentGrade = await fetch(`${base}/api/grades`, {
+    method: 'POST', headers: { ...jsonHeaders, Cookie: studentCookie },
+    body: JSON.stringify({ date: mondayKey, lesson: 2, subject: 'География', grade: 5, activityType: 'Домашнее задание', weight: 1, homeworkDate: mondayKey, homeworkLesson: 2 })
+  });
+  if (studentGrade.status !== 201) throw new Error(`Ученик не может добавить оценку к уроку: ${await studentGrade.text()}`);
+  const wrongGrade = await fetch(`${base}/api/grades`, {
+    method: 'POST', headers: { ...jsonHeaders, Cookie: studentCookie },
+    body: JSON.stringify({ date: mondayKey, lesson: 2, subject: 'Информатика', grade: 5, activityType: 'Работа на уроке', weight: 1 })
+  });
+  if (wrongGrade.status !== 400) throw new Error('Оценку можно сохранить для предмета вне расписания');
   if (updatedState.meta.version !== 2) throw new Error('Миграция состояния v2 не выполнена');
   const dayOffResponse = await fetch(`${base}/api/admin/schedule-change`, {
     method: 'POST', headers: { ...jsonHeaders, Cookie: adminCookie },
@@ -113,7 +127,7 @@ try {
   const appJs = await (await fetch(`${base}/app.js`)).text();
   if (!appJs.includes('function subjectIcon') || !appJs.includes('schedule-hw-status')) throw new Error('SVG-иконки или индикаторы ДЗ в расписании отсутствуют');
 
-  console.log('OK: Алегьери v2, дневник по датам, замены, SVG-иконки, SQLite и роли работают');
+  console.log('OK: Алегьери v3.0, дневник, замены, оценки по урокам, SQLite и роли работают');
 } finally {
   server.kill();
   await Promise.race([once(server, 'exit'), wait(1500)]);

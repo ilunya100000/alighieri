@@ -3,7 +3,9 @@
   "appName": "Алегьери",
   "webDir": "public",
   "server": {
-    "androidScheme": "https"
+    "url": "https://alegieri-production.up.railway.app",
+    "androidScheme": "https",
+    "allowNavigation": ["alegieri-production.up.railway.app"]
   },
   "android": {
     "allowMixedContent": false

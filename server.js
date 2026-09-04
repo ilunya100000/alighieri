@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   readState, writeState, createUser, authenticate, createSession, userFromToken,
-  deleteSession, getSupplies, setSupplyCount, setSupplyRecommendation
+  deleteSession, getSupplies, setSupplyCount, setSupplyRecommendation, getGrades, addGrade, deleteGrade, getHomeworkProgress, setHomeworkProgress
 } = require('./database');
 
 const PORT = Number(process.env.PORT || 4173);
@@ -113,6 +113,36 @@ function holidayFor(state, key) {
   return (state.holidays || []).find(item => key >= item.start && (!item.end || key <= item.end));
 }
 
+function dateFromKey(key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ''))) return null;
+  const date = new Date(`${key}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function lessonsForDate(state, key) {
+  const date = dateFromKey(key);
+  if (!date) throw new Error('Укажите дату урока');
+  const dayKey = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][date.getDay()];
+  const dayOff = (state.scheduleChanges || []).find(change => change.type === 'day_off' && change.date === key);
+  const holiday = holidayFor(state, key);
+  const day = (state.schedule || []).find(item => item.day === dayKey);
+  if (dayOff || holiday || !day) return { date: key, day: dayKey, off: dayOff?.note || holiday?.name || 'Учебных занятий нет', lessons: [] };
+  const lessons = day.lessons.map((originalSubject, index) => {
+    const lesson = index + 1;
+    const change = (state.scheduleChanges || []).find(item => item.day === dayKey && Number(item.lesson) === lesson && (!item.date || item.date === key));
+    return {
+      lesson,
+      originalSubject,
+      subject: change?.type === 'replacement' && change.to ? change.to : originalSubject,
+      cancelled: change?.type === 'cancelled',
+      replacement: change?.type === 'replacement',
+      note: change?.note || '',
+      teacher: change?.teacher || ''
+    };
+  });
+  return { date: key, day: dayKey, off: null, lessons };
+}
+
 async function api(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/me') {
     const user = currentUser(req);
@@ -155,6 +185,60 @@ async function api(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/state') {
     if (!requireUser(req, res)) return;
     return json(res, 200, readState());
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/time') {
+    if (!requireUser(req, res)) return;
+    return json(res, 200, { now: new Date().toISOString(), timezone: 'Europe/Moscow' });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/grades') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    return json(res, 200, { items: getGrades(user.id) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/lessons') {
+    if (!requireUser(req, res)) return;
+    try { return json(res, 200, lessonsForDate(readState(), url.searchParams.get('date'))); }
+    catch (error) { return json(res, 400, { error: error.message }); }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/homework/progress') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    return json(res, 200, { items: getHomeworkProgress(user.id) });
+  }
+
+  if (req.method === 'PUT' && /^\/api\/homework\/progress\/.+/.test(url.pathname)) {
+    const user = requireUser(req, res);
+    if (!user) return;
+    const homeworkId = decodeURIComponent(url.pathname.slice('/api/homework/progress/'.length));
+    const result = setHomeworkProgress(user.id, homeworkId, Boolean((await bodyFrom(req)).completed));
+    return json(res, 200, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/grades') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    try {
+      const input = await bodyFrom(req);
+      const plan = lessonsForDate(readState(), input.date);
+      const lesson = plan.lessons.find(item => item.lesson === Number(input.lesson));
+      if (!lesson || lesson.cancelled) return json(res, 400, { error: 'Оценку можно добавить только к уроку из актуального расписания' });
+      if (String(input.subject || '') !== lesson.subject) return json(res, 400, { error: 'Предмет не совпадает с расписанием или заменой' });
+      const homework = (readState().homework || []).find(item => item.date === input.date && Number(item.lesson) === lesson.lesson);
+      if (input.homeworkDate && (!homework || homework.subject !== lesson.subject)) return json(res, 400, { error: 'Домашнее задание не относится к выбранному уроку' });
+      const grade = addGrade(user.id, { ...input, lesson: lesson.lesson, homeworkDate: input.homeworkDate ? input.date : null, homeworkLesson: input.homeworkDate ? lesson.lesson : null });
+      return json(res, 201, grade);
+    } catch (error) { return json(res, 400, { error: error.message }); }
+  }
+
+  if (req.method === 'DELETE' && /^\/api\/grades\/\d+$/.test(url.pathname)) {
+    const user = requireUser(req, res);
+    if (!user) return;
+    deleteGrade(user.id, Number(url.pathname.split('/').pop()));
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/supplies') {
@@ -223,12 +307,15 @@ async function api(req, res, url) {
       };
       state.homework.push(item);
     }
+    const status = ['assigned', 'known', 'unknown', 'none'].includes(input.status) ? input.status : item.status;
+    const task = status === 'assigned' ? String(input.task || '').trim().slice(0, 1000) : '';
+    if (status === 'assigned' && !task) return json(res, 400, { error: 'Для статуса «Задано» укажите текст задания' });
     Object.assign(item, {
       subject,
       date: input.date,
       lesson,
-      status: input.status ?? item.status,
-      task: input.task ?? item.task,
+      status,
+      task,
       dueLabel: input.dueLabel ?? item.dueLabel
     });
     writeState(state);
@@ -291,7 +378,7 @@ async function api(req, res, url) {
     if (!map || !String(input.name || '').trim()) return json(res, 400, { error: 'Укажите карту и название точки' });
     const state = readState();
     const points = state.coordinates[map];
-    let point = points.find(entry => entry.id === input.id || entry.name === input.name);
+    let point = points.find(entry => entry.id === input.id || (!input.id && entry.name === input.name));
     if (!point) {
       point = {
         id: `${map === 'subjects' ? 's' : 't'}-${Date.now()}`,
@@ -305,6 +392,7 @@ async function api(req, res, url) {
     }
     point.x = Math.max(-20, Math.min(20, Math.round(Number(input.x) || 0)));
     point.y = Math.max(-20, Math.min(20, Math.round(Number(input.y) || 0)));
+    point.name = String(input.name).trim().slice(0, 100);
     if (input.description !== undefined) point.description = String(input.description).slice(0, 800);
     writeState(state);
     return json(res, 200, point);
@@ -347,9 +435,9 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (url.pathname === '/' && url.searchParams.get('release') === '1') {
+    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5'].includes(url.searchParams.get('release'))) {
       res.writeHead(302, {
-        Location: '/?release=2.4',
+        Location: '/?release=3.0',
         'Cache-Control': 'no-store, max-age=0',
         'Clear-Site-Data': '"cache"'
       });
