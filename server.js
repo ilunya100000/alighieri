@@ -410,7 +410,8 @@ async function api(req, res, url) {
 }
 
 function staticFile(req, res, url) {
-  const requestPath = url.pathname === '/' ? '/index.html' : url.pathname;
+  let requestPath = url.pathname === '/' ? '/index.html' : url.pathname;
+  if (requestPath.endsWith('/')) requestPath += 'index.html';
   const filePath = path.resolve(publicDir, `.${requestPath}`);
   if (!filePath.startsWith(publicDir)) {
     res.writeHead(403); res.end('Forbidden'); return;
