@@ -252,12 +252,19 @@ async function api(req, res, url) {
     const user = requireUser(req, res);
     if (!user) return;
     const input = await bodyFrom(req);
-    if (!input.subject || !input.text) return json(res, 400, { error: 'Укажите предмет и задание' });
+    const text = String(input.text || '').trim().slice(0, 1000);
+    if (!text) return json(res, 400, { error: 'Укажите текст задания' });
     const state = readState();
+    let lesson;
+    try { lesson = lessonsForDate(state, input.date).lessons.find(item => item.lesson === Number(input.lesson)); }
+    catch (error) { return json(res, 400, { error: error.message }); }
+    if (!lesson || lesson.cancelled) return json(res, 400, { error: 'Выберите действующий урок из расписания' });
     const proposal = {
-      id: `proposal-${Date.now()}`,
-      subject: String(input.subject).slice(0, 80),
-      text: String(input.text).slice(0, 600),
+      id: `proposal-${require('node:crypto').randomUUID()}`,
+      subject: lesson.subject,
+      date: input.date,
+      lesson: lesson.lesson,
+      text,
       author: user.displayName,
       authorId: user.id,
       status: 'pending',
@@ -266,6 +273,38 @@ async function api(req, res, url) {
     state.proposals.push(proposal);
     writeState(state);
     return json(res, 201, proposal);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/proposal-review') {
+    const admin = requireAdmin(req, res);
+    if (!admin) return;
+    const input = await bodyFrom(req);
+    const state = readState();
+    const proposal = state.proposals.find(item => item.id === input.id);
+    if (!proposal) return json(res, 404, { error: 'Предложение не найдено' });
+    if (proposal.status !== 'pending') return json(res, 409, { error: 'Предложение уже рассмотрено' });
+    if (!['approve', 'reject'].includes(input.action)) return json(res, 400, { error: 'Выберите действие' });
+    if (input.action === 'approve') {
+      const date = input.date || proposal.date;
+      let lesson;
+      try { lesson = lessonsForDate(state, date).lessons.find(item => item.lesson === Number(input.lesson || proposal.lesson)); }
+      catch (error) { return json(res, 400, { error: error.message }); }
+      if (!lesson || lesson.cancelled) return json(res, 400, { error: 'Урок отменён или отсутствует. Выберите другую дату и урок.' });
+      if (lesson.subject !== proposal.subject) return json(res, 409, { error: 'Предмет урока изменился. Выберите урок предложенного предмета.' });
+      const task = String(input.text ?? proposal.text).trim().slice(0, 1000);
+      if (!task) return json(res, 400, { error: 'Укажите текст задания' });
+      let homework = state.homework.find(item => item.date === date && (Number(item.lesson) === lesson.lesson || (!item.lesson && item.subject === lesson.subject)));
+      if (homework && homework.status !== 'unknown' && input.overwrite !== true) return json(res, 409, { error: 'На этот урок уже есть запись ДЗ. Заменить её?', code: 'HOMEWORK_EXISTS' });
+      if (!homework) {
+        homework = { id: `hw-${require('node:crypto').randomUUID()}`, teacher: '', dueLabel: '', accent: 'violet' };
+        state.homework.push(homework);
+      }
+      Object.assign(homework, { date, lesson: lesson.lesson, subject: lesson.subject, status: 'assigned', task });
+      proposal.homeworkId = homework.id;
+    }
+    Object.assign(proposal, { status: input.action === 'approve' ? 'approved' : 'rejected', reviewedBy: admin.id, reviewedAt: new Date().toISOString() });
+    writeState(state);
+    return json(res, 200, proposal);
   }
 
   if (req.method === 'PUT' && url.pathname.startsWith('/api/supplies/')) {
@@ -437,9 +476,9 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5'].includes(url.searchParams.get('release'))) {
+    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5', '2.6', '3.0'].includes(url.searchParams.get('release'))) {
       res.writeHead(302, {
-        Location: '/?release=3.0',
+        Location: '/?release=3.1',
         'Cache-Control': 'no-store, max-age=0',
         'Clear-Site-Data': '"cache"'
       });
@@ -455,6 +494,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Алегьери v2 запущен: http://localhost:${PORT}`);
+  console.log(`Алегьери v3.1 запущен: http://localhost:${PORT}`);
   console.log('Для устройств в одной сети используйте IP этого компьютера и тот же порт.');
 });

@@ -32,6 +32,7 @@ let serverClockOffset = 0;
 let clockTimer = null;
 let selectedGradeLesson = null;
 let selectedGradeValue = 5;
+let openScheduleDate = null;
 const supplySaveTimers = new Map();
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -48,6 +49,7 @@ async function request(url, options = {}) {
   if (!response.ok) {
     const error = new Error(body.error || `Ошибка ${response.status}`);
     error.status = response.status;
+    error.code = body.code;
     throw error;
   }
   return body;
@@ -199,11 +201,17 @@ function homeworkForLesson(date, lesson, subject) {
 }
 
 function homeworkItems(period = activeHomeworkPeriod) {
-  if (period === 'current') {
+  if (['current', 'completed', 'incomplete'].includes(period)) {
     const now = moscowNow();
     const today = dateKey(now);
     const todayFinished = schoolDayFinished(schoolDay(now), now);
-    return appState.homework.filter(item => item.status === 'assigned' && item.date >= today && (!todayFinished || item.date !== today)).sort((a, b) => `${a.date}-${a.lesson}`.localeCompare(`${b.date}-${b.lesson}`)).map((item, index) => {
+    return appState.homework.filter(item => {
+      if (item.status !== 'assigned' || !item.date) return false;
+      const done = homeworkProgress.some(entry => entry.homeworkId === item.id && entry.completed);
+      if (period === 'completed') return done;
+      if (period === 'incomplete') return !done;
+      return item.date >= today && (!todayFinished || item.date !== today);
+    }).sort((a, b) => a.date.localeCompare(b.date) || Number(a.lesson) - Number(b.lesson)).map((item, index) => {
       const date = dateFromKey(item.date);
       const day = schoolDay(date);
       const originalSubject = day?.lessons?.[Number(item.lesson) - 1] || item.subject;
@@ -338,13 +346,14 @@ function homeworkTemplate(item) {
 
 function renderHomework() {
   const allHomework = homeworkItems();
-  const assigned = allHomework.filter(item => item.status === 'assigned');
+  const currentHomework = homeworkItems('current');
+  const assigned = currentHomework.filter(item => item.status === 'assigned');
   const completed = assigned.filter(item => homeworkProgress.some(entry => entry.homeworkId === item.id && entry.completed)).length;
   const percent = assigned.length ? Math.round(completed / assigned.length * 100) : 0;
   $('#homework-count').textContent = assigned.length;
   $('#summary-homework').textContent = `${percent}%`;
   $('#summary-homework-caption').textContent = assigned.length ? `выполнено ${completed} из ${assigned.length}` : 'актуальных заданий нет';
-  const preview = allHomework.slice(0, 3);
+  const preview = currentHomework.slice(0, 3);
   $('#homework-preview').innerHTML = preview.length ? preview.map(homeworkTemplate).join('') : '<div class="proposal-empty">Домашние задания ещё не добавлены</div>';
 
   const groups = allHomework.reduce((result, item) => {
@@ -354,7 +363,7 @@ function renderHomework() {
   $('#homework-full').innerHTML = allHomework.length ? Object.entries(groups).map(([date, items]) => {
     const title = dateFromKey(date).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
     return `<section class="homework-day"><h2>${escapeHtml(title)}</h2><div class="homework-list">${items.map(homeworkTemplate).join('')}</div></section>`;
-  }).join('') : '<div class="panel proposal-empty">На выбранный период уроков нет</div>';
+  }).join('') : `<div class="panel proposal-empty">${activeHomeworkPeriod === 'completed' ? 'Выполненных заданий пока нет' : activeHomeworkPeriod === 'incomplete' ? 'Невыполненных заданий нет' : 'На выбранный период заданий нет'}</div>`;
   $('#updated-label').textContent = `Последнее обновление: ${formatUpdated(appState.meta.updatedAt)}`;
 }
 
@@ -404,12 +413,12 @@ function renderSchedule() {
   const todayPanel = $('#today-lessons').closest('.day-plan-panel');
   $('.panel-heading .eyebrow', todayPanel).textContent = finished ? 'ЗАВТРА' : 'СЕГОДНЯ';
   $('.panel-heading h2', todayPanel).textContent = finished ? 'Расписание на завтра' : 'Расписание дня';
-  $('#today-lessons').innerHTML = displayOff ? `<div class="day-off-empty"><b>${escapeHtml(displayOff.name)}</b><small>В этот день уроков нет</small></div>` : (displayDay?.lessons || []).slice(0, 5).map((lesson, index) => {
+  $('#today-lessons').innerHTML = displayOff ? `<div class="day-off-empty"><b>${escapeHtml(displayOff.name)}</b><small>В этот день уроков нет</small></div>` : (displayDay?.lessons || []).map((lesson, index) => {
     const change = changeFor(displayDay.day, index + 1, displayDate);
     const displayed = change?.type === 'replacement' ? change.to : lesson;
     const bell = bellFor(displayDay.day, index);
     const passed = !finished && isLessonPassed(bell, now);
-    return `<div class="lesson-row ${passed ? 'passed' : ''}"><span class="mini-subject-icon">${subjectIcon(displayed)}</span><div><b>${escapeHtml(displaySubjectName(displayed))}</b>${passed ? '<small class="lesson-passed">Урок прошёл</small>' : change ? `<small>${change.type === 'cancelled' ? 'Отменён' : 'Замена'}</small>` : ''}</div><span class="lesson-time">${bell ? `${bell.start}–${bell.end}` : 'время уточняется'}</span></div>`;
+    return `<div class="lesson-row ${passed ? 'passed' : ''}" role="button" tabindex="0" data-schedule-date="${dateKey(displayDate)}" data-schedule-lesson="${index + 1}"><span class="mini-subject-icon">${subjectIcon(displayed)}</span><div><b>${escapeHtml(displaySubjectName(displayed))}</b>${passed ? '<small class="lesson-passed">Урок прошёл</small>' : change ? `<small>${change.type === 'cancelled' ? 'Отменён' : 'Замена'}</small>` : ''}</div><span class="lesson-time">${bell ? `${bell.start}–${bell.end}` : 'время уточняется'}</span></div>`;
   }).join('');
 
   $('#schedule-board').innerHTML = appState.schedule.map((day, dayIndex) => {
@@ -417,13 +426,13 @@ function renderSchedule() {
     const isToday = dateKey(calendarDate) === dateKey(now);
     const off = dayOffInfo(calendarDate);
     return `<section class="day-column ${isToday ? 'today' : ''}" data-date="${dateKey(calendarDate)}">
-    <div class="day-header"><div><b>${escapeHtml(day.day)}</b><small>${calendarDate.toLocaleDateString('ru-RU', { month: 'short' })}</small></div><span>${calendarDate.getDate()}</span></div>
+    <div class="day-header" role="button" tabindex="0" data-schedule-date="${dateKey(calendarDate)}" aria-label="Открыть день ${dateKey(calendarDate)}"><div><b>${escapeHtml(day.day)}</b><small>${calendarDate.toLocaleDateString('ru-RU', { month: 'short' })}</small></div><span>${calendarDate.getDate()}</span></div>
     ${off ? `<div class="full-day-off"><span>☀</span><b>${escapeHtml(off.name)}</b><small>Учебных занятий нет</small></div>` : day.lessons.map((lesson, index) => {
       const change = changeFor(day.day, index + 1, calendarDate);
       const isCancelled = change?.type === 'cancelled';
       const displayLesson = change?.type === 'replacement' ? change.to : lesson;
       const bell = bellFor(day.day, index);
-      const passed = isToday && isLessonPassed(bell, now);
+      const passed = dateKey(calendarDate) < dateKey(now) || (isToday && isLessonPassed(bell, now));
       const className = `${isCancelled ? 'cancelled' : change ? 'changed' : ''} ${passed ? 'passed' : ''}`;
       const homeworkStatus = isCancelled ? '' : homeworkStatusFor(calendarDate, index + 1, displayLesson);
       const grades = isCancelled ? [] : gradesForLesson(calendarDate, index + 1, displayLesson);
@@ -431,7 +440,7 @@ function renderSchedule() {
       const detail = change
         ? change.note || change.teacher || lesson
         : bell?.breakAfter ? `перемена после — ${bell.breakAfter} мин` : bell ? 'последний урок' : 'звонки субботы пока не указаны';
-      return `<div class="schedule-lesson ${className}">
+      return `<div class="schedule-lesson ${className}" role="button" tabindex="0" data-schedule-date="${dateKey(calendarDate)}" data-schedule-lesson="${index + 1}" aria-label="Открыть ${index + 1} урок: ${escapeHtml(displaySubjectName(displayLesson))}">
         ${change ? `<span class="change-badge">${isCancelled ? 'отмена' : 'замена'}</span>` : ''}
         <span class="lesson-index">${index + 1} урок · ${timeLabel}</span>
         <div class="schedule-subject"><span class="mini-subject-icon">${subjectIcon(displayLesson)}</span><b>${escapeHtml(displaySubjectName(displayLesson))}</b></div>
@@ -613,6 +622,41 @@ function showCoordinateDetail(pointId) {
   $('#coordinate-detail').innerHTML = `<div class="detail-color ${subjectPoint ? 'detail-subject-icon' : ''}" style="--detail:${escapeHtml(point.color)}">${visual}</div><h2>${escapeHtml(title)}</h2><div class="coordinate-metrics">${metric(labels.x, point.x, labels.left, labels.right, !subjectPoint)}${metric(labels.y, point.y, labels.bottom, labels.top, subjectPoint)}</div><p class="coordinate-note">${escapeHtml(point.description || 'Описание пока не добавлено.')}</p>${editForm}`;
 }
 
+function renderScheduleDetail() {
+  if (!openScheduleDate) return;
+  const date = dateFromKey(openScheduleDate);
+  const day = schoolDay(date);
+  const off = dayOffInfo(date);
+  $('#schedule-detail-title').textContent = date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  $('#schedule-detail-content').innerHTML = off || !day ? `<p class="day-off-empty">${escapeHtml(off?.name || 'Учебных занятий нет')}</p>` : day.lessons.map((original, index) => {
+    const lesson = index + 1;
+    const change = changeFor(day.day, lesson, date);
+    const subject = change?.type === 'replacement' ? change.to : original;
+    const cancelled = change?.type === 'cancelled';
+    const homework = homeworkForLesson(date, lesson, subject);
+    const assigned = !cancelled && homework?.status === 'assigned';
+    const done = assigned && homeworkProgress.some(entry => entry.homeworkId === homework.id && entry.completed);
+    const grades = gradesForLesson(date, lesson, subject);
+    const bell = bellFor(day.day, index);
+    const now = moscowNow();
+    const passed = openScheduleDate < dateKey(now) || (openScheduleDate === dateKey(now) && isLessonPassed(bell, now));
+    return `<article class="day-detail-lesson" id="detail-lesson-${lesson}"><div class="day-detail-heading"><span class="mini-subject-icon">${subjectIcon(subject)}</span><div><small>${lesson} урок · ${bell ? `${bell.start}–${bell.end}` : 'Время уточняется'}${cancelled ? ' · Отменён' : passed ? ' · Урок прошёл' : ''}</small><h3>${escapeHtml(displaySubjectName(subject))}</h3></div></div>${change ? `<p class="day-detail-note">${cancelled ? 'Урок отменён' : change.type === 'replacement' ? `Замена вместо ${escapeHtml(original)}` : 'Изменение урока'}${change.teacher ? ` · ${escapeHtml(change.teacher)}` : ''}${change.note ? ` · ${escapeHtml(change.note)}` : ''}</p>` : ''}<div class="day-detail-homework"><h4>Домашнее задание</h4><p>${cancelled ? 'На отменённый урок ДЗ не требуется' : assigned ? escapeHtml(homework.task) : escapeHtml(statusMeta[homework?.status]?.label || statusMeta.unknown.label)}</p>${assigned ? `<button type="button" class="homework-complete ${done ? 'completed' : ''}" data-homework-complete="${escapeHtml(homework.id)}" aria-pressed="${Boolean(done)}">${done ? '✓ Выполнено' : '○ Отметить выполненным'}</button>` : ''}</div><div class="day-detail-grades"><h4>Мои оценки</h4>${grades.length ? grades.map(item => `<div class="day-detail-grade"><b class="grade-mark">${item.grade}</b><span>${escapeHtml(item.activityType)}<small>Вес ${item.weight}${item.homeworkDate ? ' · За домашнее задание / тетрадь' : ''}</small></span></div>`).join('') : '<p>Оценок за этот урок пока нет</p>'}</div></article>`;
+  }).join('');
+}
+
+function fillProposalLessons(select, dateKeyValue, subject = '', preferred = null) {
+  const previous = preferred ?? select.value;
+  const date = dateFromKey(dateKeyValue);
+  const day = instructionDay(date);
+  const lessons = (day?.lessons || []).flatMap((original, index) => {
+    const change = changeFor(day.day, index + 1, date);
+    const effective = change?.type === 'replacement' ? change.to : original;
+    return change?.type === 'cancelled' || (subject && subject !== effective) ? [] : [{ lesson: index + 1, subject: effective }];
+  });
+  select.innerHTML = lessons.length ? lessons.map(item => `<option value="${item.lesson}">${item.lesson}. ${escapeHtml(displaySubjectName(item.subject))}</option>`).join('') : '<option value="">Подходящих уроков на эту дату нет</option>';
+  if (lessons.some(item => String(item.lesson) === String(previous))) select.value = String(previous);
+}
+
 function renderAdmin() {
   const select = $('#admin-hw-id');
   const selected = select.value;
@@ -620,7 +664,8 @@ function renderAdmin() {
   select.innerHTML = subjects.map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
   if (selected && subjects.includes(selected)) select.value = selected;
   if (!adminHomeworkDirty) syncAdminHomeworkLessons();
-  $('#proposal-list').innerHTML = appState.proposals.length ? appState.proposals.map(item => `<article class="proposal-item"><b>${escapeHtml(item.subject)}</b><p>${escapeHtml(item.text)}</p><small>${escapeHtml(item.author)} · ожидает модерации</small></article>`).join('') : '<div class="proposal-empty">Новых предложений пока нет</div>';
+  const pending = appState.proposals.filter(item => item.status === 'pending');
+  $('#proposal-list').innerHTML = pending.length ? pending.map(item => `<article class="proposal-item"><b>${escapeHtml(item.subject)}</b><p>${escapeHtml(item.text)}</p><small>${escapeHtml(item.author)}${item.date ? ` · ${escapeHtml(item.date)} · ${Number(item.lesson)} урок` : ' · Дата пока не указана'}</small><div class="proposal-actions"><button type="button" class="primary-button" data-proposal-approve="${escapeHtml(item.id)}">Поставить</button><button type="button" class="secondary-button" data-proposal-reject="${escapeHtml(item.id)}">Отклонить</button></div></article>`).join('') : '<div class="proposal-empty">Новых предложений пока нет</div>';
   $('#day-off-list').innerHTML = (appState.scheduleChanges || []).filter(item => item.type === 'day_off').map(item => `<span>${escapeHtml(item.date)} · ${escapeHtml(item.note || 'Выходной')}</span>`).join('') || '<span>Дополнительных выходных нет</span>';
   renderAdminSupplies();
 }
@@ -693,7 +738,7 @@ function renderAll() {
   renderGrades();
   renderCoordinates();
   renderAdmin();
-  $('#proposal-subject').innerHTML = subjectsFromSchedule().map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
+  if ($('#schedule-detail-dialog').open) renderScheduleDetail();
   const changeSelected = $('#change-to').value;
   $('#change-to').innerHTML = subjectsFromSchedule().map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(displaySubjectName(subject))}</option>`).join('');
   if ([...$('#change-to').options].some(option => option.value === changeSelected)) $('#change-to').value = changeSelected;
@@ -768,6 +813,22 @@ function syncChangeFields() {
 
 function bindEvents() {
   document.addEventListener('click', event => {
+    const close = event.target.closest('[data-close-dialog]');
+    if (close) close.closest('dialog').close();
+    const target = event.target.closest('[data-schedule-date]');
+    if (!target) return;
+    openScheduleDate = target.dataset.scheduleDate;
+    renderScheduleDetail();
+    $('#schedule-detail-dialog').showModal();
+    if (target.dataset.scheduleLesson) $(`#detail-lesson-${target.dataset.scheduleLesson}`)?.scrollIntoView({ block: 'nearest' });
+  });
+  document.addEventListener('keydown', event => {
+    if (event.target.matches('[data-schedule-date]') && ['Enter', ' '].includes(event.key)) {
+      event.preventDefault();
+      event.target.click();
+    }
+  });
+  document.addEventListener('click', event => {
     const routeButton = event.target.closest('[data-route]');
     if (routeButton) { event.preventDefault(); navigate(routeButton.dataset.route); }
   });
@@ -783,6 +844,7 @@ function bindEvents() {
     const button = event.target.closest('[data-homework-complete]');
     if (!button) return;
     const homeworkId = button.dataset.homeworkComplete;
+    button.disabled = true;
     const previous = homeworkProgress.some(entry => entry.homeworkId === homeworkId && entry.completed);
     try {
       await request(`/api/homework/progress/${encodeURIComponent(homeworkId)}`, { method: 'PUT', body: JSON.stringify({ completed: !previous }) });
@@ -790,8 +852,10 @@ function bindEvents() {
       if (item) item.completed = !previous;
       else homeworkProgress.push({ homeworkId, completed: !previous });
       renderHomework();
+      if ($('#schedule-detail-dialog').open) renderScheduleDetail();
       showToast(!previous ? 'Задание отмечено выполненным' : 'Отметка выполнения снята');
     } catch (error) { showToast(error.message); }
+    finally { button.disabled = false; }
   });
 
   $('#sidebar-toggle').addEventListener('click', () => {
@@ -944,13 +1008,68 @@ function bindEvents() {
   });
 
   const dialog = $('#proposal-dialog');
-  $('#open-proposal').addEventListener('click', () => dialog.showModal());
+  $('#open-proposal').addEventListener('click', () => {
+    $('#proposal-date').value ||= defaultSchoolDate();
+    fillProposalLessons($('#proposal-subject'), $('#proposal-date').value);
+    dialog.showModal();
+  });
+  $('#proposal-date').addEventListener('change', () => fillProposalLessons($('#proposal-subject'), $('#proposal-date').value));
   $('#proposal-form').addEventListener('submit', async event => {
     event.preventDefault();
+    if ($('#send-proposal').disabled) return;
+    $('#send-proposal').disabled = true;
     try {
-      await request('/api/homework/proposals', { method: 'POST', body: JSON.stringify({ subject: $('#proposal-subject').value, text: $('#proposal-text').value }) });
+      await request('/api/homework/proposals', { method: 'POST', body: JSON.stringify({ date: $('#proposal-date').value, lesson: Number($('#proposal-subject').value), text: $('#proposal-text').value }) });
       dialog.close(); $('#proposal-form').reset(); showToast('Предложение отправлено на модерацию'); await loadState({ quiet: true });
     } catch (error) { showToast(error.message); }
+    finally { $('#send-proposal').disabled = false; }
+  });
+  const reviewDialog = $('#proposal-review-dialog');
+  $('#proposal-list').addEventListener('click', async event => {
+    const approve = event.target.closest('[data-proposal-approve]');
+    const reject = event.target.closest('[data-proposal-reject]');
+    if (approve) {
+      const item = appState.proposals.find(entry => entry.id === approve.dataset.proposalApprove);
+      if (!item) return;
+      $('#proposal-review-id').value = item.id;
+      $('#proposal-review-subject').textContent = `${item.subject} · ${item.author}`;
+      $('#proposal-review-date').value = item.date || defaultSchoolDate();
+      $('#proposal-review-text').value = item.text;
+      fillProposalLessons($('#proposal-review-lesson'), $('#proposal-review-date').value, item.subject, item.lesson);
+      reviewDialog.showModal();
+    }
+    if (reject) {
+      reject.disabled = true;
+      try {
+        await request('/api/admin/proposal-review', { method: 'POST', body: JSON.stringify({ id: reject.dataset.proposalReject, action: 'reject' }) });
+        showToast('Предложение отклонено');
+        await loadState({ quiet: true });
+      } catch (error) { showToast(error.message); }
+      finally { reject.disabled = false; }
+    }
+  });
+  $('#proposal-review-date').addEventListener('change', () => {
+    const item = appState.proposals.find(entry => entry.id === $('#proposal-review-id').value);
+    fillProposalLessons($('#proposal-review-lesson'), $('#proposal-review-date').value, item?.subject);
+  });
+  $('#proposal-review-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = $('button[type="submit"]', event.target);
+    if (button.disabled) return;
+    button.disabled = true;
+    const input = { id: $('#proposal-review-id').value, action: 'approve', date: $('#proposal-review-date').value, lesson: Number($('#proposal-review-lesson').value), text: $('#proposal-review-text').value };
+    try {
+      try { await request('/api/admin/proposal-review', { method: 'POST', body: JSON.stringify(input) }); }
+      catch (error) {
+        if (error.code !== 'HOMEWORK_EXISTS') throw error;
+        if (!window.confirm(error.message)) return;
+        await request('/api/admin/proposal-review', { method: 'POST', body: JSON.stringify({ ...input, overwrite: true }) });
+      }
+      reviewDialog.close();
+      showToast('Задание поставлено в дневник');
+      await loadState({ quiet: true });
+    } catch (error) { showToast(error.message); }
+    finally { button.disabled = false; }
   });
 
   $('#profile-button').addEventListener('click', event => { event.stopPropagation(); $('#profile-menu').hidden = !$('#profile-menu').hidden; });
@@ -1030,7 +1149,7 @@ async function init() {
   $('#apk-download-button').hidden = !isMobileBrowser;
   if ('caches' in window) {
     const cacheNames = await caches.keys().catch(() => []);
-    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-0-android').map(name => caches.delete(name)));
+    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-1').map(name => caches.delete(name)));
   }
   const sidebarCollapsed = localStorage.getItem('alegieri-sidebar-collapsed') === 'true';
   document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -1042,7 +1161,7 @@ async function init() {
   bindEvents();
   const initialRoute = location.hash.slice(1);
   navigate(['today', 'homework', 'schedule', 'supplies', 'grades', 'coordinates', 'admin'].includes(initialRoute) ? initialRoute : 'today');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.0.1', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.1', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
   try {
     const user = await request('/api/me');
     await showApp(user);

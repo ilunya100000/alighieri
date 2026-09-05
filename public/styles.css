@@ -22,6 +22,30 @@
   --radius: 20px;
 }
 
+.homework-tabs { flex-wrap: wrap; gap: 4px; }
+[data-schedule-date] { cursor: pointer; }
+[data-schedule-date]:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.schedule-detail-dialog { width: min(760px, calc(100vw - 24px)); max-width: 760px; max-height: 88dvh; }
+.schedule-detail-dialog .dialog-card { width: 100%; max-height: 88dvh; display: flex; flex-direction: column; }
+.schedule-detail-dialog .dialog-heading { flex-shrink: 0; }
+#schedule-detail-content { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.schedule-detail-dialog .homework-complete { min-height: 40px; padding: 8px 12px; font-size: 12px; }
+.day-detail-lesson { border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-top: 14px; background: var(--surface); }
+.day-detail-heading { display: flex; align-items: center; gap: 12px; }
+.day-detail-heading h3 { margin: 4px 0 0; font-size: 17px; }
+.day-detail-heading small, .day-detail-grade small { display: block; color: var(--muted); font-size: 12px; }
+.day-detail-note { margin: 12px 0; padding: 10px; border-radius: 10px; background: var(--orange-soft); }
+.day-detail-homework, .day-detail-grades { margin-top: 15px; border-top: 1px solid var(--line); padding-top: 12px; }
+.day-detail-lesson h4 { margin: 0 0 8px; font-size: 13px; }
+.day-detail-lesson p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.day-detail-grade { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.proposal-actions { display: flex; gap: 10px; margin-top: 14px; }
+#proposal-review-form { display: grid; gap: 16px; }
+#proposal-review-form label { display: grid; gap: 6px; }
+#proposal-review-form input, #proposal-review-form select, #proposal-review-form textarea, #proposal-date { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+#proposal-review-subject { margin: 0; }
+button:disabled { cursor: wait; opacity: .65; }
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
