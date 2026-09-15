@@ -319,7 +319,11 @@ async function loadState({ quiet = false } = {}) {
     localStorage.setItem(`alegieri-supplies-${currentUser.id}`, JSON.stringify(supplyState));
     setSyncState('online', `Обновлено ${formatUpdated(fresh.meta.updatedAt)}`);
   } catch (error) {
-    if (error.status === 401) { showAuth(); return; }
+    if ([401, 423, 503].includes(error.status)) {
+      localStorage.removeItem('alegieri-user');
+      showAuth('login', error.status === 401 ? '' : error.message);
+      return;
+    }
     const cached = localStorage.getItem('alegieri-state');
     appState = cached ? JSON.parse(cached) : fallbackState;
     const cachedSupplies = localStorage.getItem(`alegieri-supplies-${currentUser?.id}`);
@@ -765,12 +769,13 @@ function applyUser(user) {
   if (user.role !== 'admin' && location.hash === '#admin') navigate('today');
 }
 
-function showAuth(tab = 'login') {
+function showAuth(tab = 'login', message = '') {
   currentUser = null;
   currentRole = 'student';
   $('#app-shell').hidden = true;
   $('#auth-screen').hidden = false;
   switchAuthTab(tab);
+  if (message) $('#auth-error').textContent = message;
 }
 
 async function showApp(user) {
@@ -1149,7 +1154,7 @@ async function init() {
   $('#apk-download-button').hidden = !isMobileBrowser;
   if ('caches' in window) {
     const cacheNames = await caches.keys().catch(() => []);
-    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-1').map(name => caches.delete(name)));
+    await Promise.all(cacheNames.filter(name => name.startsWith('alegieri-') && name !== 'alegieri-v3-1-1-final').map(name => caches.delete(name)));
   }
   const sidebarCollapsed = localStorage.getItem('alegieri-sidebar-collapsed') === 'true';
   document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -1161,23 +1166,23 @@ async function init() {
   bindEvents();
   const initialRoute = location.hash.slice(1);
   navigate(['today', 'homework', 'schedule', 'supplies', 'grades', 'coordinates', 'admin'].includes(initialRoute) ? initialRoute : 'today');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.1', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=3.1.1', { updateViaCache: 'none' }).then(registration => registration.update()).catch(() => {});
   try {
     const user = await request('/api/me');
     await showApp(user);
   } catch (error) {
     const cachedUser = localStorage.getItem('alegieri-user');
-    if (error.status !== 401 && currentUser) {
+    if (![401, 423, 503].includes(error.status) && currentUser) {
       console.error(error);
       $('#auth-screen').hidden = true;
       $('#app-shell').hidden = false;
       showToast('Не удалось обновить часть интерфейса — повторите попытку');
-    } else if (error.status !== 401 && cachedUser) {
+    } else if (![401, 423, 503].includes(error.status) && cachedUser) {
       try {
         await showApp(JSON.parse(cachedUser));
         showToast('Сервер временно недоступен — показана сохранённая копия');
       } catch { showAuth(); }
-    } else showAuth();
+    } else showAuth('login', error.status === 401 ? '' : error.message);
   }
   setInterval(() => { if (currentUser) loadState({ quiet: true }); }, 60_000);
 }

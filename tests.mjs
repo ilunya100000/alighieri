@@ -123,6 +123,7 @@ try {
   const pageResponse = await fetch(`${base}/`);
   const html = await pageResponse.text();
   if (!pageResponse.ok || !html.includes('Алегьери') || !html.includes('login-form')) throw new Error('Входное окно недоступно');
+  if (!html.includes('Алегьери: Финальная версия') || !html.includes('Разработка и поддержка сайта Альгьери завершена.') || !html.includes('Сервис закрывается')) throw new Error('Финальная новость или уведомление о закрытии отсутствуют');
   if (!html.includes('data-filter="current"') || !html.includes('data-filter="tomorrow"') || !html.includes('data-filter="week"')) throw new Error('Периоды дневника v2 отсутствуют');
   const appJs = await (await fetch(`${base}/app.js`)).text();
   if (!appJs.includes('function subjectIcon') || !appJs.includes('schedule-hw-status')) throw new Error('SVG-иконки или индикаторы ДЗ в расписании отсутствуют');
@@ -164,7 +165,9 @@ try {
   if ((await post('/api/admin/proposal-review', adminCookie, { id: changedProposal.id, action: 'approve' })).status !== 409) throw new Error('Предложение принято на предмет, изменённый заменой');
   await post('/api/admin/schedule-change', adminCookie, { date: mondayKey, lesson: 3, type: 'cancelled' });
   if ((await post('/api/homework/proposals', studentCookie, { date: mondayKey, lesson: 3, text: 'Отменённый урок' })).status !== 400) throw new Error('Предложение принято на отменённый урок');
-  console.log('OK: Алегьери v3.1 — дневник, замены, оценки, предложения, модерация, личное выполнение и роли');
+  const closedPage = await fetch(`${base}/closed.html`);
+  if (!closedPage.ok || !(await closedPage.text()).includes('Сервис закрыт')) throw new Error('Страница закрытия отсутствует');
+  console.log('OK: Алегьери v3.1.1 — финальная новость, дневник, замены, оценки, предложения, модерация, личное выполнение и роли');
 } finally {
   server.kill();
   await Promise.race([once(server, 'exit'), wait(1500)]);

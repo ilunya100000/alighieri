@@ -11,17 +11,18 @@
   <meta name="description" content="Дневник, расписание и помощник одного класса">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg?v=2.4">
-  <link rel="stylesheet" href="/styles.css?v=3.1">
+  <link rel="stylesheet" href="/styles.css?v=3.1.1">
   <title>Алегьери</title>
 </head>
 <body>
   <section class="auth-screen" id="auth-screen">
     <div class="auth-identity">
       <img src="/icon.svg?v=2.4" alt="Логотип Алегьери">
-      <div><p>УЧЕБНОЕ ПРОСТРАНСТВО</p><h1>Алегьери</h1><span>Всё важное для 9 В — в одном месте.</span></div>
+      <div><p>ФИНАЛЬНАЯ ВЕРСИЯ</p><h1>Алегьери</h1><span>Учебное пространство 9 В.</span></div>
     </div>
     <div class="auth-card">
       <div class="auth-heading"><p class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</p><h2 id="auth-title">Вход в аккаунт</h2><p id="auth-subtitle">Введите логин и пароль, чтобы продолжить.</p></div>
+      <aside class="closing-notice" aria-label="Уведомление о закрытии"><b>Сервис закрывается</b><p>С 1 октября 2026 года вход для пользователей будет закрыт. С 5 октября сайт и приложения прекратят работу.</p></aside>
       <div class="segmented auth-tabs"><button class="active" data-auth-tab="login">Вход</button><button data-auth-tab="register">Регистрация</button></div>
       <form id="login-form" class="auth-form">
         <label>Логин<input id="login-username" autocomplete="username" required placeholder="Ваш логин"></label>
@@ -37,14 +38,14 @@
       <p class="auth-error" id="auth-error" role="alert"></p>
       <small class="auth-note">Ваши личные данные и принадлежности доступны только после входа.</small>
     </div>
-    <p class="auth-version">Алегьери · версия 3.1</p>
+    <p class="auth-version">Алегьери: Финальная версия · 3.1.1</p>
   </section>
 
   <div class="app-shell" id="app-shell" hidden>
     <aside class="sidebar">
       <a class="brand" href="#today" data-route="today" aria-label="Алегьери">
         <span class="brand-mark"><img src="/icon.svg?v=2.4" alt=""></span>
-        <span><b>Алегьери</b><small>9 В · 3.1</small></span>
+        <span><b>Алегьери</b><small>Финальная версия · 3.1.1</small></span>
       </a>
 
       <nav class="main-nav" aria-label="Основная навигация">
@@ -81,6 +82,13 @@
 
       <div class="page-wrap">
         <section class="page active" data-page="today">
+          <article class="final-news panel" aria-label="Новость о завершении сервиса">
+            <p class="eyebrow">ОФИЦИАЛЬНАЯ НОВОСТЬ · 15.09.2026</p>
+            <h1>Алегьери: Финальная версия</h1>
+            <h2>Разработка и поддержка сайта Альгьери завершена.</h2>
+            <p>С 15.09.2026 года разработка и поддержка сервиса Алегьери официально завершена! Да, для разработчиков это было непростое решение, но сервис закрывается.</p>
+            <p>С 1 октября 2026 года войти в него станет невозможно, а с 5 октября сайт и приложения прекратят свою работу. Решение связано с нежеланием вкладываться материально в разработку сервиса в связи с низкой популярностью сервиса. Больше никаких обновлений на сайте не будет!</p>
+          </article>
           <div class="welcome-row">
             <div><p class="eyebrow" id="today-date">СЕГОДНЯ</p><h1 id="welcome-title">Доброе утро! <span>👋</span></h1><p>Вот что важно сегодня. Всё актуально и уже собрано в одном месте.</p></div>
             <button class="primary-button" data-route="homework"><span>＋</span> Предложить ДЗ</button>
@@ -187,10 +195,10 @@
 
   <div class="profile-menu" id="profile-menu" hidden>
     <div class="profile-menu-account"><b id="profile-menu-name">Ученик</b><small id="profile-menu-role">Ученик</small></div>
-    <div class="profile-menu-account"><small>Алегьери · версия 3.1</small></div>
+    <div class="profile-menu-account"><small>Алегьери: Финальная версия · 3.1.1</small></div>
     <button id="logout-button">Выйти из аккаунта</button>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/app.js?v=3.1" defer></script>
+  <script src="/app.js?v=3.1.1" defer></script>
 </body>
 </html>

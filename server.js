@@ -10,6 +10,8 @@ const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || '0.0.0.0';
 const publicDir = path.join(__dirname, 'public');
 const loginAttempts = new Map();
+const LOGIN_CLOSED_AT = new Date('2026-10-01T00:00:00+03:00');
+const SERVICE_SHUTDOWN_AT = new Date('2026-10-05T00:00:00+03:00');
 
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -43,6 +45,31 @@ function cookieValue(req, name) {
 
 function currentUser(req) {
   return userFromToken(cookieValue(req, 'alegieri_session'));
+}
+
+function serviceNow() {
+  const forced = process.env.ALEGIERI_NOW ? new Date(process.env.ALEGIERI_NOW) : null;
+  return forced && !Number.isNaN(forced.getTime()) ? forced : new Date();
+}
+
+function servicePhase(now = serviceNow()) {
+  if (now >= SERVICE_SHUTDOWN_AT) return 'shutdown';
+  if (now >= LOGIN_CLOSED_AT) return 'restricted';
+  return 'active';
+}
+
+function closedResponse(res, phase = servicePhase()) {
+  const shutdown = phase === 'shutdown';
+  json(res, shutdown ? 503 : 423, {
+    error: shutdown
+      ? 'Алегьери закрыт. С 5 октября 2026 года сайт и приложения прекратили работу.'
+      : 'Алегьери закрыт для пользователей с 1 октября 2026 года. Вход доступен только администратору.'
+  });
+}
+
+function accessAllowed(user) {
+  const phase = servicePhase();
+  return phase === 'active' || (phase === 'restricted' && user?.role === 'admin');
 }
 
 function setSessionCookie(res, session, req) {
@@ -98,11 +125,20 @@ function requireUser(req, res) {
     json(res, 401, { error: 'Войдите в аккаунт' });
     return null;
   }
+  if (!accessAllowed(user)) {
+    if (servicePhase() === 'restricted') clearSessionCookie(res);
+    closedResponse(res);
+    return null;
+  }
   return user;
 }
 
 function requireAdmin(req, res) {
   const user = currentUser(req);
+  if (!accessAllowed(user)) {
+    closedResponse(res);
+    return null;
+  }
   if (!user || user.role !== 'admin') {
     json(res, 403, { error: 'Требуются права администратора' });
     return null;
@@ -147,10 +183,15 @@ function lessonsForDate(state, key) {
 async function api(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/me') {
     const user = currentUser(req);
+    if (user && !accessAllowed(user)) {
+      if (servicePhase() === 'restricted') clearSessionCookie(res);
+      return closedResponse(res);
+    }
     return json(res, user ? 200 : 401, user || { error: 'Нет активной сессии' });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
+    if (servicePhase() !== 'active') return closedResponse(res);
     const input = await bodyFrom(req);
     try {
       const user = createUser({ username: input.username, password: input.password, displayName: input.displayName });
@@ -171,6 +212,7 @@ async function api(req, res, url) {
       recordLoginFailure(req);
       return json(res, 401, { error: 'Неверный логин или пароль' });
     }
+    if (!accessAllowed(user)) return closedResponse(res);
     clearLoginFailures(req);
     const session = createSession(user.id);
     setSessionCookie(res, session, req);
@@ -476,9 +518,17 @@ function staticFile(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5', '2.6', '3.0'].includes(url.searchParams.get('release'))) {
+    if (servicePhase() === 'shutdown') {
+      if (url.pathname.startsWith('/api/')) return closedResponse(res, 'shutdown');
+      if (url.pathname !== '/closed.html') {
+        res.writeHead(302, { Location: '/closed.html', 'Cache-Control': 'no-store, max-age=0' });
+        res.end();
+        return;
+      }
+    }
+    if (url.pathname === '/' && ['1', '2.2', '2.4', '2.5', '2.6', '3.0', '3.1'].includes(url.searchParams.get('release'))) {
       res.writeHead(302, {
-        Location: '/?release=3.1',
+        Location: '/?release=3.1.1',
         'Cache-Control': 'no-store, max-age=0',
         'Clear-Site-Data': '"cache"'
       });
@@ -494,6 +544,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Алегьери v3.1 запущен: http://localhost:${PORT}`);
+  console.log(`Алегьери v3.1.1 запущен: http://localhost:${PORT}`);
   console.log('Для устройств в одной сети используйте IP этого компьютера и тот же порт.');
 });
